@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -213,7 +214,7 @@ class EventStream(Streamer[EventT]):
     async def close(self) -> None:
         if self._active and self._registered_listener is not None:
             try:
-                self._app.dispatcher.unsubscribe(self._event_type, self._registered_listener)
+                self._app.event_manager.unsubscribe(self._event_type, self._registered_listener)
             except ValueError:
                 pass
 
@@ -241,5 +242,5 @@ class EventStream(Streamer[EventT]):
             reference = weakref.WeakMethod(self._listener)  # type: ignore[arg-type]
             listener = _generate_weak_listener(reference)
             self._registered_listener = listener
-            self._app.dispatcher.subscribe(self._event_type, listener)
+            self._app.event_manager.subscribe(self._event_type, listener)
             self._active = True

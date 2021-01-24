@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -47,6 +48,12 @@ class OwnUserUpdateEvent(shard_events.ShardEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring from ShardEvent>>.
+
+    old_user: typing.Optional[users.OwnUser] = attr.ib()
+    """The old application user.
+
+    This will be `builtins.None` if the user missing from the cache.
+    """
 
     user: users.OwnUser = attr.ib()
     """This application user.

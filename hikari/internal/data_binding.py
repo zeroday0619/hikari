@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,19 +30,15 @@ __all__: typing.List[str] = [
     "JSONArray",
     "JSONish",
     "URLEncodedForm",
-    "MultipartForm",
-    "ContentDisposition",
     "dump_json",
     "load_json",
     "JSONObjectBuilder",
     "cast_json_array",
 ]
 
-import json
 import typing
 
-import aiohttp.client_reqrep
-import aiohttp.typedefs
+import aiohttp
 import multidict
 
 from hikari import snowflakes
@@ -57,12 +54,6 @@ Query = typing.Union[typing.Dict[str, str], multidict.MultiDict[str]]
 
 URLEncodedForm = aiohttp.FormData
 """Type hint for content of type application/x-www-form-encoded."""
-
-MultipartForm = aiohttp.FormData
-"""Type hint for content of type multipart/form-data."""
-
-ContentDisposition = aiohttp.client_reqrep.ContentDisposition
-"""Type hint for content disposition information."""
 
 # MyPy does not support recursive types yet. This has been ongoing for a long time, unfortunately.
 # See https://github.com/python/typing/issues/182
@@ -86,6 +77,8 @@ if typing.TYPE_CHECKING:
 
 
 else:
+    import json
+
     dump_json = json.dumps
     """Convert a Python type to a JSON string."""
 
@@ -97,12 +90,12 @@ else:
 class StringMapBuilder(multidict.MultiDict[str]):
     """Helper class used to quickly build query strings or header maps.
 
-    This will consume any items that are not `hikari.undefined.UndefinedType`.
+    This will consume any items that are not `hikari.undefined.UNDEFINED`.
     If a value _is_ unspecified, it will be ignored when inserting it. This reduces
     the amount of boilerplate needed for generating the headers and query strings for
     low-level HTTP API interaction, amongst other things.
 
-    !!! warn
+    !!! warning
         Because this subclasses `builtins.dict`, you should not use the
         index operator to set items on this object. Doing so will skip any
         form of validation on the type. Use the `put*` methods instead.
@@ -165,13 +158,13 @@ class StringMapBuilder(multidict.MultiDict[str]):
 class JSONObjectBuilder(typing.Dict[str, JSONish]):
     """Helper class used to quickly build JSON objects from various values.
 
-    If provided with any values that are `hikari.undefined.UndefinedType`,
+    If provided with any values that are `hikari.undefined.UNDEFINED`,
     then these values will be ignored.
 
     This speeds up generation of JSON payloads for low level HTTP and websocket
     API interaction.
 
-    !!! warn
+    !!! warning
         Because this subclasses `builtins.dict`, you should not use the
         index operator to set items on this object. Doing so will skip any
         form of validation on the type. Use the `put*` methods instead.

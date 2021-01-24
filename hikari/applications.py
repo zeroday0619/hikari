@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -42,14 +43,15 @@ from hikari import files
 from hikari import guilds
 from hikari import snowflakes
 from hikari import urls
+from hikari import users
 from hikari.internal import attr_extensions
 from hikari.internal import enums
 from hikari.internal import routes
 
 if typing.TYPE_CHECKING:
+    from hikari import channels
     from hikari import permissions as permissions_
     from hikari import traits
-    from hikari import users
 
 
 @typing.final
@@ -120,7 +122,7 @@ class OAuth2Scope(str, enums.Enum):
     GROUP_DM_JOIN = "gdm.join"
     """Enables joining users into a group DM.
 
-    !!! warn
+    !!! warning
         This cannot add the bot to a group DM.
     """
 
@@ -235,6 +237,9 @@ class OwnConnection:
 class OwnGuild(guilds.PartialGuild):
     """Represents a user bound partial guild object."""
 
+    features: typing.Sequence[guilds.GuildFeatureish] = attr.ib(eq=False, hash=False, repr=False)
+    """A list of the features in this guild."""
+
     is_owner: bool = attr.ib(eq=False, hash=False, repr=True)
     """`builtins.True` when the current user owns this guild."""
 
@@ -255,11 +260,8 @@ class TeamMembershipState(int, enums.Enum):
 
 @attr_extensions.with_copy
 @attr.s(eq=False, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
-class TeamMember:
+class TeamMember(users.User):
     """Represents a member of a Team."""
-
-    app: traits.RESTAware = attr.ib(repr=False, metadata={attr_extensions.SKIP_DEEP_COPY: True})
-    """The client application that models may use for procedures."""
 
     membership_state: typing.Union[TeamMembershipState, int] = attr.ib(repr=False)
     """The state of this user's membership."""
@@ -276,6 +278,58 @@ class TeamMember:
 
     user: users.User = attr.ib(repr=True)
     """The user representation of this team member."""
+
+    @property
+    def app(self) -> traits.RESTAware:
+        """Return the app that is bound to the user object."""
+        return self.user.app
+
+    @property
+    def avatar_hash(self) -> typing.Optional[str]:
+        return self.user.avatar_hash
+
+    @property
+    def avatar_url(self) -> typing.Optional[files.URL]:
+        return self.user.avatar_url
+
+    @property
+    def default_avatar_url(self) -> files.URL:
+        return self.user.default_avatar_url
+
+    @property
+    def discriminator(self) -> str:
+        return self.user.discriminator
+
+    @property
+    def flags(self) -> users.UserFlag:
+        return self.user.flags
+
+    @property
+    def id(self) -> snowflakes.Snowflake:
+        return self.user.id
+
+    @id.setter
+    def id(self, value: snowflakes.Snowflake) -> None:
+        raise TypeError("Cannot mutate the ID of a member")
+
+    @property
+    def is_bot(self) -> bool:
+        return self.user.is_bot
+
+    @property
+    def is_system(self) -> bool:
+        return self.user.is_system
+
+    @property
+    def mention(self) -> str:
+        return self.user.mention
+
+    @property
+    def username(self) -> str:
+        return self.user.username
+
+    async def fetch_dm_channel(self) -> channels.DMChannel:
+        return await self.user.fetch_dm_channel()
 
     def __str__(self) -> str:
         return str(self.user)
@@ -365,25 +419,11 @@ class Team(snowflakes.Unique):
 
 @attr_extensions.with_copy
 @attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
-class Application(snowflakes.Unique):
+class Application(guilds.PartialApplication):
     """Represents the information of an Oauth2 Application."""
 
     app: traits.RESTAware = attr.ib(repr=False, eq=False, hash=False, metadata={attr_extensions.SKIP_DEEP_COPY: True})
     """The client application that models may use for procedures."""
-
-    id: snowflakes.Snowflake = attr.ib(
-        eq=True,
-        hash=True,
-        repr=True,
-    )
-    """The ID of this entity."""
-
-    name: str = attr.ib(eq=False, hash=False, repr=True)
-    """The name of this application."""
-
-    # TODO: default to None for consistency?
-    description: str = attr.ib(eq=False, hash=False, repr=False)
-    """The description of this application, or an empty string if undefined."""
 
     is_bot_public: typing.Optional[bool] = attr.ib(eq=False, hash=False, repr=True)
     """`builtins.True` if the bot associated with this application is public.
@@ -397,27 +437,14 @@ class Application(snowflakes.Unique):
     Will be `builtins.None` if this application doesn't have a bot.
     """
 
-    owner: typing.Optional[users.User] = attr.ib(eq=False, hash=False, repr=True)
-    """The application's owner.
-
-    This should always be `builtins.None` in application objects retrieved outside
-    Discord's oauth2 flow.
-    """
+    owner: users.User = attr.ib(eq=False, hash=False, repr=True)
+    """The application's owner."""
 
     rpc_origins: typing.Optional[typing.Sequence[str]] = attr.ib(eq=False, hash=False, repr=False)
     """A collection of this application's RPC origin URLs, if RPC is enabled."""
 
-    summary: str = attr.ib(eq=False, hash=False, repr=False)
-    """This summary for this application's primary SKU if it's sold on Discord.
-
-    Will be an empty string if undefined.
-    """
-
     verify_key: typing.Optional[bytes] = attr.ib(eq=False, hash=False, repr=False)
     """The base64 encoded key used for the GameSDK's `GetTicket`."""
-
-    icon_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
-    """The CDN hash of this application's icon, if set."""
 
     team: typing.Optional[Team] = attr.ib(eq=False, hash=False, repr=False)
     """The team this application belongs to.
@@ -439,54 +466,6 @@ class Application(snowflakes.Unique):
 
     cover_image_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
     """The CDN's hash of this application's cover image, used on the store."""
-
-    def __str__(self) -> str:
-        return self.name
-
-    @property
-    def icon_url(self) -> typing.Optional[files.URL]:
-        """Team icon, if there is one.
-
-        Returns
-        -------
-        typing.Optional[hikari.files.URL]
-            The URL, or `builtins.None` if no icon exists.
-        """
-        return self.format_icon()
-
-    def format_icon(self, *, ext: str = "png", size: int = 4096) -> typing.Optional[files.URL]:
-        """Generate the icon for this application.
-
-        Parameters
-        ----------
-        ext : builtins.str
-            The extension to use for this URL, defaults to `png`.
-            Supports `png`, `jpeg`, `jpg` and `webp`.
-        size : builtins.int
-            The size to set for the URL, defaults to `4096`.
-            Can be any power of two between 16 and 4096.
-
-        Returns
-        -------
-        typing.Optional[hikari.files.URL]
-            The URL, or `builtins.None` if no icon exists.
-
-        Raises
-        ------
-        builtins.ValueError
-            If the size is not an integer power of 2 between 16 and 4096
-            (inclusive).
-        """
-        if self.icon_hash is None:
-            return None
-
-        return routes.CDN_APPLICATION_ICON.compile_to_file(
-            urls.CDN_URL,
-            application_id=self.id,
-            hash=self.icon_hash,
-            size=size,
-            file_format=ext,
-        )
 
     @property
     def cover_image_url(self) -> typing.Optional[files.URL]:

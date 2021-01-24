@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -127,7 +128,8 @@ def init_logging(
             format="%(levelname)-1.1s %(asctime)23.23s %(name)s: %(message)s",
             stream=sys.stderr,
         )
-        logging.captureWarnings(True)
+
+    logging.captureWarnings(True)
 
 
 def print_banner(package: typing.Optional[str], allow_color: bool, force_color: bool) -> None:
@@ -273,11 +275,16 @@ class HikariVersion(distutils.version.StrictVersion):
         else:
             self.prerelease = None
 
+    def __str__(self) -> str:
+        vstring = ".".join(map(str, self.version))
 
-async def check_for_updates(
-    http_settings: config.HTTPSettings,
-    proxy_settings: config.ProxySettings,
-) -> None:
+        if self.prerelease:
+            vstring = vstring + self.prerelease[0] + str(self.prerelease[1])
+
+        return vstring
+
+
+async def check_for_updates(http_settings: config.HTTPSettings, proxy_settings: config.ProxySettings) -> None:
     """Perform a check for newer versions of the library, logging any found."""
     if about.__git_sha1__.casefold() == "head":
         # We are not in a PyPI release, return
@@ -311,7 +318,7 @@ async def check_for_updates(
                     # Don't encourage the user to upgrade from a stable to a dev release...
                     continue
 
-                if v.version == this_version.version:
+                if v.version == this_version.version and v.prerelease == this_version.prerelease:
                     continue
 
                 if v > this_version:

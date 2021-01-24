@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,37 +29,79 @@ from hikari.internal import routes
 from tests.hikari import hikari_test_helpers
 
 
-def test_OAuth2Scope_str_operator():
-    scope = applications.OAuth2Scope("activities.read")
-    assert str(scope) == "ACTIVITIES_READ"
+class TestOAuth2Scope:
+    def test_str_operator(self):
+        scope = applications.OAuth2Scope("activities.read")
+        assert str(scope) == "ACTIVITIES_READ"
 
 
-def test_ConnectionVisibility_str_operator():
-    connection_visibility = applications.ConnectionVisibility(1)
-    assert str(connection_visibility) == "EVERYONE"
+class TestConnectionVisibility:
+    def test_str_operator(self):
+        connection_visibility = applications.ConnectionVisibility(1)
+        assert str(connection_visibility) == "EVERYONE"
 
 
-def test_TeamMembershipState_str_operator():
-    state = applications.TeamMembershipState(2)
-    assert str(state) == "ACCEPTED"
+class TestTeamMembershipState:
+    def test_str_operator(self):
+        state = applications.TeamMembershipState(2)
+        assert str(state) == "ACCEPTED"
 
 
-def test_TeamMember_str_operator():
-    mock_team_member = mock.Mock(
-        applications.TeamMember, user=mock.Mock(users.User, __str__=mock.Mock(return_value="mario#1234"))
-    )
-    assert applications.TeamMember.__str__(mock_team_member) == "mario#1234"
+class TestTeamMember:
+    @pytest.fixture()
+    def model(self):
+        return applications.TeamMember(membership_state=4, permissions=["*"], team_id=34123, user=mock.Mock(users.User))
 
+    def test_app_property(self, model):
+        assert model.app is model.user.app
 
-def test_Team_str_operator():
-    team = applications.Team(id=696969, app=object(), icon_hash="", members=[], owner_id=0)
-    assert str(team) == "Team 696969"
+    def test_avatar_hash_property(self, model):
+        assert model.avatar_hash is model.user.avatar_hash
 
+    def test_avatar_url_property(self, model):
+        assert model.avatar_url is model.user.avatar_url
 
-def test_Application_str_operator():
-    mock_application = mock.Mock(applications.Application)
-    mock_application.name = "beans"
-    assert applications.Application.__str__(mock_application) == "beans"
+    def test_default_avatar_url_property(self, model):
+        assert model.default_avatar_url is model.user.default_avatar_url
+
+    def test_discriminator_property(self, model):
+        assert model.discriminator is model.user.discriminator
+
+    def test_flags_property(self, model):
+        assert model.flags is model.user.flags
+
+    def test_id_property(self, model):
+        assert model.id is model.user.id
+
+    def test_id_setter(self, model):
+        with pytest.raises(TypeError, match="Cannot mutate the ID of a member"):
+            model.id = 42
+
+    def test_is_bot_property(self, model):
+        assert model.is_bot is model.user.is_bot
+
+    def test_is_system_property(self, model):
+        assert model.is_system is model.user.is_system
+
+    def test_mention_property(self, model):
+        assert model.app is model.user.app
+
+    def test_username_property(self, model):
+        assert model.app is model.user.app
+
+    @pytest.mark.asyncio
+    async def test_fetch_dm_channel(self, model):
+        model.user.fetch_dm_channel = mock.AsyncMock()
+
+        result = await model.fetch_dm_channel()
+        assert result is model.user.fetch_dm_channel.return_value
+        model.user.fetch_dm_channel.assert_awaited_once()
+
+    def test_str_operator(self):
+        mock_team_member = mock.Mock(
+            applications.TeamMember, user=mock.Mock(users.User, __str__=mock.Mock(return_value="mario#1234"))
+        )
+        assert applications.TeamMember.__str__(mock_team_member) == "mario#1234"
 
 
 class TestTeam:
@@ -67,6 +110,10 @@ class TestTeam:
         return hikari_test_helpers.mock_class_namespace(
             applications.Team, slots_=False, init_=False, id=123, icon_hash="ahashicon"
         )()
+
+    def test_str_operator(self):
+        team = applications.Team(id=696969, app=object(), icon_hash="", members=[], owner_id=0)
+        assert str(team) == "Team 696969"
 
     def test_icon_url_property(self, model):
         model.format_icon = mock.Mock(return_value="url")
@@ -107,33 +154,6 @@ class TestApplication:
             icon_hash="ahashicon",
             cover_image_hash="ahashcover",
         )()
-
-    def test_icon_url_property(self, model):
-        model.format_icon = mock.Mock(return_value="url")
-
-        assert model.icon_url == "url"
-
-        model.format_icon.assert_called_once_with()
-
-    def test_format_icon_when_hash_is_None(self, model):
-        model.icon_hash = None
-
-        with mock.patch.object(
-            routes, "CDN_APPLICATION_ICON", new=mock.Mock(compile_to_file=mock.Mock(return_value="file"))
-        ) as route:
-            assert model.format_icon(ext="jpeg", size=1) is None
-
-        route.compile_to_file.assert_not_called()
-
-    def test_format_icon_when_hash_is_not_None(self, model):
-        with mock.patch.object(
-            routes, "CDN_APPLICATION_ICON", new=mock.Mock(compile_to_file=mock.Mock(return_value="file"))
-        ) as route:
-            assert model.format_icon(ext="jpeg", size=1) == "file"
-
-        route.compile_to_file.assert_called_once_with(
-            urls.CDN_URL, application_id=123, hash="ahashicon", size=1, file_format="jpeg"
-        )
 
     def test_cover_image_url_property(self, model):
         model.format_cover_image = mock.Mock(return_value="url")

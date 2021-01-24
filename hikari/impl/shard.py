@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -60,6 +61,8 @@ if typing.TYPE_CHECKING:
     from hikari import config
     from hikari import guilds
     from hikari import users as users_
+    from hikari.api import event_factory as event_factory_
+    from hikari.api import event_manager as event_manager_
 
 # Important attributes
 _D: typing.Final[str] = sys.intern("d")
@@ -142,6 +145,7 @@ class _GatewayTransport(aiohttp.ClientWebSocketResponse):
         # something disconnects, which makes aiohttp just shut down as if we
         # did it.
         if not self.sent_close:
+            self.sent_close = True
             self.logger.debug("sending close frame with code %s and message %s", int(code), message)
             try:
                 return await asyncio.wait_for(super().close(code=code, message=message), timeout=5)
@@ -156,7 +160,7 @@ class _GatewayTransport(aiohttp.ClientWebSocketResponse):
         timeout: typing.Optional[float] = None,
     ) -> typing.Any:
         pl = await self._receive_and_check(timeout)
-        if self.logger.getEffectiveLevel() <= ux.TRACE:
+        if self.logger.isEnabledFor(ux.TRACE):
             filtered = self.log_filterer(pl)  # type: ignore
             self.logger.log(ux.TRACE, "received payload with size %s\n    %s", len(pl), filtered)
         return loads(pl)
@@ -169,7 +173,7 @@ class _GatewayTransport(aiohttp.ClientWebSocketResponse):
         dumps: aiohttp.typedefs.JSONEncoder = json.dumps,
     ) -> None:
         pl = dumps(data)
-        if self.logger.getEffectiveLevel() <= ux.TRACE:
+        if self.logger.isEnabledFor(ux.TRACE):
             filtered = self.log_filterer(pl)  # type: ignore
             self.logger.log(ux.TRACE, "sending payload with size %s\n    %s", len(pl), filtered)
         await self.send_str(pl, compress)
@@ -193,14 +197,13 @@ class _GatewayTransport(aiohttp.ClientWebSocketResponse):
                     errors.ShardCloseCode.RATE_LIMITED,
                 )
 
-                # Assume we can always resume first.
                 raise errors.GatewayServerClosedConnectionError(reason, close_code, can_reconnect)
 
             elif message.type == aiohttp.WSMsgType.CLOSING or message.type == aiohttp.WSMsgType.CLOSED:
                 # May be caused by the server shutting us down.
                 # May be caused by Windows injecting an EOF if something disconnects, as some
                 # network drivers appear to do this.
-                raise errors.GatewayError("Socket has closed")
+                raise errors.GatewayConnectionError("Socket has closed")
 
             elif len(buff) != 0 and message.type != aiohttp.WSMsgType.BINARY:
                 raise errors.GatewayError(f"Unexpected message type received {message.type.name}, expected BINARY")
@@ -301,7 +304,14 @@ class _GatewayTransport(aiohttp.ClientWebSocketResponse):
             # Windows will sometimes raise an aiohttp.ClientOSError
             # If we cannot do DNS lookup, this will fail with a ClientConnectionError
             # usually.
-            raise errors.GatewayConnectionError(f"Failed to connect to Discord: {ex!r}") from ex
+            #
+            # aiohttp.WSServerHandshakeError has a really bad str, so we use the repr instead.
+            if isinstance(ex, aiohttp.WSServerHandshakeError):
+                reason = repr(ex)
+            else:
+                reason = str(ex)
+
+            raise errors.GatewayConnectionError(reason) from None
 
         finally:
             await exit_stack.aclose()
@@ -314,10 +324,22 @@ class _GatewayTransport(aiohttp.ClientWebSocketResponse):
 
 @typing.final
 class GatewayShardImpl(shard.GatewayShard):
-    """Implementation of a V6 and V7 compatible gateway.
+    """Implementation of a V8 compatible gateway.
 
     Parameters
     ----------
+    event_manager : hikari.api.event_manager.EventManager
+        The event manager this shard should make calls to.
+    event_factory : hikari.api.event_factory.EventFactory
+        The event factory this shard should use.
+    token : builtins.str
+        The bot token to use.
+    url : builtins.str
+        The gateway URL to use. This should not contain a query-string or
+        fragments.
+
+    Other Parameters
+    ----------------
     compression : typing.Optional[buitlins.str]
         Compression format to use for the shard. Only supported values are
         `"payload_zlib_stream"` or `builtins.None` to disable it.
@@ -335,20 +357,13 @@ class GatewayShardImpl(shard.GatewayShard):
         The initial status to set on login for the shard. Defaults to
         `hikari.presences.Status.ONLINE`.
     intents : hikari.intents.Intents
-        Collection of intents to use. Unlike on the V6 gateway, this is
-        MANDATORY.
+        Collection of intents to use.
     large_threshold : builtins.int
         The number of members to have in a guild for it to be considered large.
     shard_id : builtins.int
         The shard ID.
     shard_count : builtins.int
         The shard count.
-    event_consumer
-        A non-coroutine function consuming a `GatewayShardImpl`,
-        a `builtins.str` event name, and a
-        `hikari.internal.data_binding.JSONObject` event object as parameters.
-        This should return `builtins.None`, and will be called with each event
-        that fires.
     http_settings : hikari.config.HTTPSettings
         The HTTP-related settings to use while negotiating a websocket.
     proxy_settings : hikari.config.ProxySettings
@@ -356,11 +371,6 @@ class GatewayShardImpl(shard.GatewayShard):
     data_format : builtins.str
         Data format to use for inbound data. Only supported format is
         `"json"`.
-    token : builtins.str
-        The bot token to use.
-    url : builtins.str
-        The gateway URL to use. This should not contain a query-string or
-        fragments.
 
     !!! note
         If all four of `initial_activity`, `initial_idle_since`,
@@ -379,7 +389,8 @@ class GatewayShardImpl(shard.GatewayShard):
         "_closed",
         "_closing",
         "_chunking_rate_limit",
-        "_event_consumer",
+        "_event_manager",
+        "_event_factory",
         "_handshake_completed",
         "_heartbeat_latency",
         "_http_settings",
@@ -408,6 +419,8 @@ class GatewayShardImpl(shard.GatewayShard):
         self,
         *,
         compression: typing.Optional[str] = shard.GatewayCompression.PAYLOAD_ZLIB_STREAM,
+        event_factory: event_factory_.EventFactory,
+        event_manager: event_manager_.EventManager,
         initial_activity: typing.Optional[presences.Activity] = None,
         initial_idle_since: typing.Optional[datetime.datetime] = None,
         initial_is_afk: bool = False,
@@ -416,7 +429,6 @@ class GatewayShardImpl(shard.GatewayShard):
         large_threshold: int = 250,
         shard_id: int = 0,
         shard_count: int = 1,
-        event_consumer: typing.Callable[[shard.GatewayShard, str, data_binding.JSONObject], None],
         http_settings: config.HTTPSettings,
         proxy_settings: config.ProxySettings,
         data_format: str = shard.GatewayDataFormat.JSON,
@@ -445,7 +457,8 @@ class GatewayShardImpl(shard.GatewayShard):
             f"shard {shard_id} chunking rate limit",
             *_CHUNKING_RATELIMIT,
         )
-        self._event_consumer = event_consumer
+        self._event_factory = event_factory
+        self._event_manager = event_manager
         self._handshake_completed = asyncio.Event()
         self._heartbeat_latency = float("nan")
         self._http_settings = http_settings
@@ -500,7 +513,7 @@ class GatewayShardImpl(shard.GatewayShard):
                         "shard.close() was called and the websocket was still alive -- "
                         "disconnecting immediately with GOING AWAY"
                     )
-                    await self._ws.close(code=errors.ShardCloseCode.GOING_AWAY, message=b"shard disconnecting")
+                    await self._ws.send_close(code=errors.ShardCloseCode.GOING_AWAY, message=b"shard disconnecting")
                 self._closing.set()
             finally:
                 self._chunking_rate_limit.close()
@@ -516,6 +529,23 @@ class GatewayShardImpl(shard.GatewayShard):
         """Wait for this shard to close, if running."""
         await self._closed.wait()
 
+    async def _send_json(
+        self,
+        data: data_binding.JSONObject,
+        compress: typing.Optional[int] = None,
+        *,
+        dumps: aiohttp.typedefs.JSONEncoder = json.dumps,
+    ) -> None:
+        await self._total_rate_limit.acquire()
+
+        await self._ws.send_json(data=data, compress=compress, dumps=dumps)  # type: ignore[union-attr]
+
+    def _check_if_alive(self) -> None:
+        if not self.is_alive:
+            raise errors.ComponentNotRunningError(
+                f"shard {self._shard_id} is not running so it cannot be interacted with"
+            )
+
     async def request_guild_members(
         self,
         guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
@@ -523,13 +553,14 @@ class GatewayShardImpl(shard.GatewayShard):
         include_presences: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         query: str = "",
         limit: int = 0,
-        users: undefined.UndefinedOr[typing.Sequence[snowflakes.SnowflakeishOr[users_.User]]] = undefined.UNDEFINED,
+        users: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[users_.User]] = undefined.UNDEFINED,
         nonce: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> None:
+        self._check_if_alive()
         if not query and not limit and not self._intents & intents_.Intents.GUILD_MEMBERS:
             raise errors.MissingIntentError(intents_.Intents.GUILD_MEMBERS)
 
-        if include_presences is not undefined.UNDEFINED and not self._intents & intents_.Intents.GUILD_PRESENCES:
+        if include_presences and not self._intents & intents_.Intents.GUILD_PRESENCES:
             raise errors.MissingIntentError(intents_.Intents.GUILD_PRESENCES)
 
         if users is not undefined.UNDEFINED and (query or limit):
@@ -554,7 +585,7 @@ class GatewayShardImpl(shard.GatewayShard):
         payload.put_snowflake_array("user_ids", users)
         payload.put("nonce", nonce)
 
-        await self._ws.send_json({_OP: _REQUEST_GUILD_MEMBERS, _D: payload})  # type: ignore[union-attr]
+        await self._send_json({_OP: _REQUEST_GUILD_MEMBERS, _D: payload})
 
     async def start(self) -> None:
         if self._run_task is not None:
@@ -572,7 +603,7 @@ class GatewayShardImpl(shard.GatewayShard):
             # which implies the shard died before it could become ready/resume...
             self._run_task = None
             run_task.result()
-            raise asyncio.CancelledError(f"Shard {self._shard_id} was closed before it could start successfully")
+            raise asyncio.CancelledError(f"shard {self._shard_id} was closed before it could start successfully")
 
     async def update_presence(
         self,
@@ -582,6 +613,7 @@ class GatewayShardImpl(shard.GatewayShard):
         activity: undefined.UndefinedNoneOr[presences.Activity] = undefined.UNDEFINED,
         status: undefined.UndefinedOr[presences.Status] = undefined.UNDEFINED,
     ) -> None:
+        self._check_if_alive()
         presence_payload = self._serialize_and_store_presence_payload(
             idle_since=idle_since,
             afk=afk,
@@ -589,24 +621,25 @@ class GatewayShardImpl(shard.GatewayShard):
             status=status,
         )
         payload: data_binding.JSONObject = {_OP: _PRESENCE_UPDATE, _D: presence_payload}
-        await self._ws.send_json(payload)  # type: ignore[union-attr]
+        await self._send_json(payload)
 
     async def update_voice_state(
         self,
         guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
         channel: typing.Optional[snowflakes.SnowflakeishOr[channels.GuildVoiceChannel]],
-        *,
+        *,  # TODO: make default to undefined
         self_mute: bool = False,
         self_deaf: bool = False,
     ) -> None:
-        await self._ws.send_json(  # type: ignore[union-attr]
+        self._check_if_alive()
+        await self._send_json(
             {
                 _OP: _VOICE_STATE_UPDATE,
                 _D: {
                     "guild_id": str(int(guild)),
                     "channel_id": str(int(channel)) if channel is not None else None,
-                    "mute": self_mute,
-                    "deaf": self_deaf,
+                    "self_mute": self_mute,
+                    "self_deaf": self_deaf,
                 },
             }
         )
@@ -639,7 +672,11 @@ class GatewayShardImpl(shard.GatewayShard):
             self._logger.info("shard has resumed [session:%s, seq:%s]", self._session_id, self._seq)
             self._handshake_completed.set()
 
-        self._event_consumer(self, name, data)
+        try:
+            self._event_manager.consume_raw_event(self, name, data)
+
+        except LookupError:
+            self._logger.debug("ignoring unknown event %s:\n    %r", name, data)
 
     async def _identify(self) -> None:
         payload: data_binding.JSONObject = {
@@ -661,7 +698,7 @@ class GatewayShardImpl(shard.GatewayShard):
 
         payload[_D]["presence"] = self._serialize_and_store_presence_payload()
 
-        await self._ws.send_json(payload)  # type: ignore[union-attr]
+        await self._send_json(payload)
 
     async def _heartbeat(self, heartbeat_interval: float) -> bool:
         # Return True if zombied or should reconnect, false if time to die forever.
@@ -734,7 +771,7 @@ class GatewayShardImpl(shard.GatewayShard):
         return None
 
     async def _resume(self) -> None:
-        await self._ws.send_json(  # type: ignore[union-attr]
+        await self._send_json(
             {
                 _OP: _RESUME,
                 _D: {"token": self._token, "seq": self._seq, "session_id": self._session_id},
@@ -776,8 +813,7 @@ class GatewayShardImpl(shard.GatewayShard):
 
                 except errors.GatewayConnectionError as ex:
                     self._logger.error(
-                        "failed to communicate with server, reason was: %s. Will retry shortly",
-                        ex.__cause__,
+                        "failed to communicate with server, reason was: %r. Will retry shortly", ex.reason
                     )
 
                 except errors.GatewayServerClosedConnectionError as ex:
@@ -809,6 +845,7 @@ class GatewayShardImpl(shard.GatewayShard):
     async def _run_once(self) -> bool:
         self._handshake_completed.clear()
         dispatch_disconnect = False
+        exception = None
 
         exit_stack = contextlib.AsyncExitStack()
 
@@ -824,7 +861,7 @@ class GatewayShardImpl(shard.GatewayShard):
 
         try:
             # Dispatch CONNECTED synthetic event.
-            self._event_consumer(self, "CONNECTED", {})
+            self._event_manager.dispatch(self._event_factory.deserialize_connected_event(self)),
             dispatch_disconnect = True
 
             heartbeat_task = await self._wait_for_hello()
@@ -883,6 +920,10 @@ class GatewayShardImpl(shard.GatewayShard):
             finally:
                 heartbeat_task.cancel()
 
+        except Exception as ex:
+            exception = ex
+            raise
+
         finally:
             ws = self._ws
             self._ws = None
@@ -890,19 +931,23 @@ class GatewayShardImpl(shard.GatewayShard):
             if dispatch_disconnect:
                 # If we managed to connect, we must always send the DISCONNECT event
                 # afterwards.
-                self._event_consumer(self, "DISCONNECTED", {})
+                self._event_manager.dispatch(self._event_factory.deserialize_disconnected_event(self)),
+
+            # Ignore errors if we are closing
+            if self._closing.is_set() or self._closed.is_set():
+                return False
 
             # Check if we made the socket close or handled it. If we didn't, we should always try to
             # reconnect, as aiohttp is probably closing it internally without telling us properly.
-            if not ws.sent_close:  # type: ignore[union-attr]
+            if exception is None and not ws.sent_close:  # type: ignore[union-attr]
                 return True
 
     async def _send_heartbeat(self) -> None:
-        await self._ws.send_json({_OP: _HEARTBEAT, _D: self._seq})  # type: ignore[union-attr]
+        await self._send_json({_OP: _HEARTBEAT, _D: self._seq})
         self._last_heartbeat_sent = time.monotonic()
 
     async def _send_heartbeat_ack(self) -> None:
-        await self._ws.send_json({_OP: _HEARTBEAT_ACK, _D: None})  # type: ignore[union-attr]
+        await self._send_json({_OP: _HEARTBEAT_ACK, _D: None})
 
     @staticmethod
     def _serialize_activity(activity: typing.Optional[presences.Activity]) -> data_binding.JSONish:

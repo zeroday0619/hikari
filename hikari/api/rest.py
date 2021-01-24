@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -36,7 +37,7 @@ if typing.TYPE_CHECKING:
 
     from hikari import applications
     from hikari import audit_logs
-    from hikari import channels
+    from hikari import channels as channels_
     from hikari import colors
     from hikari import embeds as embeds_
     from hikari import emojis
@@ -48,6 +49,7 @@ if typing.TYPE_CHECKING:
     from hikari import permissions as permissions_
     from hikari import sessions
     from hikari import snowflakes
+    from hikari import templates
     from hikari import users
     from hikari import voices
     from hikari import webhooks
@@ -80,8 +82,8 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
 
     @abc.abstractmethod
     async def fetch_channel(
-        self, channel: snowflakes.SnowflakeishOr[channels.PartialChannel]
-    ) -> channels.PartialChannel:
+        self, channel: snowflakes.SnowflakeishOr[channels_.PartialChannel]
+    ) -> channels_.PartialChannel:
         """Fetch a channel.
 
         Parameters
@@ -142,7 +144,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def edit_channel(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
         /,
         *,
         name: undefined.UndefinedOr[str] = undefined.UNDEFINED,
@@ -153,11 +155,13 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         user_limit: undefined.UndefinedOr[int] = undefined.UNDEFINED,
         rate_limit_per_user: undefined.UndefinedOr[time.Intervalish] = undefined.UNDEFINED,
         permission_overwrites: undefined.UndefinedOr[
-            typing.Sequence[channels.PermissionOverwrite]
+            typing.Sequence[channels_.PermissionOverwrite]
         ] = undefined.UNDEFINED,
-        parent_category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels.GuildCategory]] = undefined.UNDEFINED,
+        parent_category: undefined.UndefinedOr[
+            snowflakes.SnowflakeishOr[channels_.GuildCategory]
+        ] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-    ) -> channels.PartialChannel:
+    ) -> channels_.PartialChannel:
         """Edit a channel.
 
         Parameters
@@ -223,9 +227,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def follow_channel(
         self,
-        news_channel: snowflakes.SnowflakeishOr[channels.GuildNewsChannel],
-        target_channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
-    ) -> channels.ChannelFollow:
+        news_channel: snowflakes.SnowflakeishOr[channels_.GuildNewsChannel],
+        target_channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
+    ) -> channels_.ChannelFollow:
         """Follow a news channel to send messages to a target channel.
 
         Parameters
@@ -270,7 +274,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         """
 
     @abc.abstractmethod
-    async def delete_channel(self, channel: snowflakes.SnowflakeishOr[channels.PartialChannel]) -> None:
+    async def delete_channel(self, channel: snowflakes.SnowflakeishOr[channels_.PartialChannel]) -> None:
         """Delete a channel in a guild, or close a DM.
 
         Parameters
@@ -310,8 +314,8 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def edit_permission_overwrites(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
-        target: typing.Union[channels.PermissionOverwrite, users.PartialUser, guilds.PartialRole],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
+        target: typing.Union[channels_.PermissionOverwrite, users.PartialUser, guilds.PartialRole],
         *,
         allow: undefined.UndefinedOr[permissions_.Permissions] = undefined.UNDEFINED,
         deny: undefined.UndefinedOr[permissions_.Permissions] = undefined.UNDEFINED,
@@ -323,10 +327,10 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def edit_permission_overwrites(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
         target: snowflakes.Snowflakeish,
         *,
-        target_type: channels.PermissionOverwriteType,
+        target_type: channels_.PermissionOverwriteType,
         allow: undefined.UndefinedOr[permissions_.Permissions] = undefined.UNDEFINED,
         deny: undefined.UndefinedOr[permissions_.Permissions] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
@@ -336,12 +340,12 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def edit_permission_overwrites(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
         target: typing.Union[
-            snowflakes.Snowflakeish, users.PartialUser, guilds.PartialRole, channels.PermissionOverwrite
+            snowflakes.Snowflakeish, users.PartialUser, guilds.PartialRole, channels_.PermissionOverwrite
         ],
         *,
-        target_type: undefined.UndefinedOr[channels.PermissionOverwriteType] = undefined.UNDEFINED,
+        target_type: undefined.UndefinedOr[channels_.PermissionOverwriteType] = undefined.UNDEFINED,
         allow: undefined.UndefinedOr[permissions_.Permissions] = undefined.UNDEFINED,
         deny: undefined.UndefinedOr[permissions_.Permissions] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
@@ -402,9 +406,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_permission_overwrite(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
         target: snowflakes.SnowflakeishOr[
-            typing.Union[channels.PermissionOverwrite, guilds.PartialRole, users.PartialUser, snowflakes.Snowflakeish]
+            typing.Union[channels_.PermissionOverwrite, guilds.PartialRole, users.PartialUser, snowflakes.Snowflakeish]
         ],
     ) -> None:
         """Delete a custom permission for an entity in a given guild channel.
@@ -442,7 +446,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
 
     @abc.abstractmethod
     async def fetch_channel_invites(
-        self, channel: snowflakes.SnowflakeishOr[channels.GuildChannel]
+        self, channel: snowflakes.SnowflakeishOr[channels_.GuildChannel]
     ) -> typing.Sequence[invites.InviteWithMetadata]:
         """Fetch all invites pointing to the given guild channel.
 
@@ -483,7 +487,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def create_invite(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildChannel],
         *,
         max_age: undefined.UndefinedOr[time.Intervalish] = undefined.UNDEFINED,
         max_uses: undefined.UndefinedOr[int] = undefined.UNDEFINED,
@@ -553,7 +557,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
 
     @abc.abstractmethod
     def trigger_typing(
-        self, channel: snowflakes.SnowflakeishOr[channels.TextChannel]
+        self, channel: snowflakes.SnowflakeishOr[channels_.TextChannel]
     ) -> special_endpoints.TypingIndicator:
         """Trigger typing in a text channel.
 
@@ -617,7 +621,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
 
     @abc.abstractmethod
     async def fetch_pins(
-        self, channel: snowflakes.SnowflakeishOr[channels.TextChannel]
+        self, channel: snowflakes.SnowflakeishOr[channels_.TextChannel]
     ) -> typing.Sequence[messages_.Message]:
         """Fetch the pinned messages in this text channel.
 
@@ -658,7 +662,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def pin_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> None:
         """Pin an existing message in the given text channel.
@@ -699,7 +703,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def unpin_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> None:
         """Unpin a given message from a given text channel.
@@ -740,7 +744,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     def fetch_messages(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         *,
         before: undefined.UndefinedOr[snowflakes.SearchableSnowflakeishOr[snowflakes.Unique]] = undefined.UNDEFINED,
         after: undefined.UndefinedOr[snowflakes.SearchableSnowflakeishOr[snowflakes.Unique]] = undefined.UNDEFINED,
@@ -778,9 +782,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             An iterator to fetch the messages.
 
         !!! note
-           This call is not a coroutine function, it returns a special type of
-           lazy iterator that will perform API calls as you iterate across it.
-           See `hikari.iterators` for the full API for this iterator type.
+            This call is not a coroutine function, it returns a special type of
+            lazy iterator that will perform API calls as you iterate across it.
+            See `hikari.iterators` for the full API for this iterator type.
 
         Raises
         ------
@@ -816,7 +820,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def fetch_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> messages_.Message:
         """Fetch a specific message in the given text channel.
@@ -862,7 +866,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def create_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         content: undefined.UndefinedOr[typing.Any] = undefined.UNDEFINED,
         *,
         embed: undefined.UndefinedOr[embeds_.Embed] = undefined.UNDEFINED,
@@ -870,12 +874,14 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         attachments: undefined.UndefinedOr[typing.Sequence[files.Resourceish]] = undefined.UNDEFINED,
         tts: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         nonce: undefined.UndefinedOr[str] = undefined.UNDEFINED,
+        reply: undefined.UndefinedOr[snowflakes.SnowflakeishOr[messages_.PartialMessage]] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        mentions_reply: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
         ] = undefined.UNDEFINED,
     ) -> messages_.Message:
         """Create a message in the given channel.
@@ -917,10 +923,17 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             this must be less than 32 bytes. If not provided, then
             a null value is placed on the message instead. All users can
             see this value.
+        reply : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage]]
+            If provided, the message to reply to.
         mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
             If provided, whether the message should parse @everyone/@here
             mentions.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        mentions_reply : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether to mention the author of the message
+            that is being replied to.
+
+            This will not do anything if not being used with `reply`.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             If provided, and `builtins.True`, all user mentions will be detected.
             If provided, and `builtins.False`, all user mentions will be ignored
             if appearing in the message body.
@@ -928,7 +941,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             `hikari.snowflakes.Snowflake`, or
             `hikari.users.PartialUser` derivatives to enforce mentioning
             specific users.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             If provided, and `builtins.True`, all role mentions will be detected.
             If provided, and `builtins.False`, all role mentions will be ignored
             if appearing in the message body.
@@ -983,7 +996,8 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             limits; too many attachments; attachments that are too large;
             invalid image URLs in embeds; users in `user_mentions` not being
             mentioned in the message content; roles in `role_mentions` not
-            being mentioned in the message content.
+            being mentioned in the message content; if `reply` is
+            not found or not in the same channel as `channel`.
         hikari.errors.UnauthorizedError
             If you are unauthorized to make the request (invalid/missing token).
         hikari.errors.ForbiddenError
@@ -1011,9 +1025,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         """  # noqa: E501 - Line too long
 
     @abc.abstractmethod
-    async def create_crossposts(
+    async def crosspost_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildNewsChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.GuildNewsChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> messages_.Message:
         """Broadcast an announcement message.
@@ -1061,17 +1075,18 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def edit_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
         content: undefined.UndefinedOr[typing.Any] = undefined.UNDEFINED,
         *,
         embed: undefined.UndefinedNoneOr[embeds_.Embed] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        mentions_reply: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
         ] = undefined.UNDEFINED,
         flags: undefined.UndefinedOr[messages_.MessageFlag] = undefined.UNDEFINED,
     ) -> messages_.Message:
@@ -1110,7 +1125,12 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             not changed. If `builtins.True`, then `@everyone`/`@here` mentions
             in the message content will show up as mentioning everyone that can
             view the chat.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        mentions_reply : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether to mention the author of the message
+            that is being replied to.
+
+            This will not do anything if `message` is not a reply message.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             If provided, sanitation for user mentions. If
             `hikari.undefined.UNDEFINED`, then the previous setting is
             not changed. If `builtins.True`, all valid user mentions will behave
@@ -1120,7 +1140,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             You may alternatively pass a collection of
             `hikari.snowflakes.Snowflake` user IDs, or
             `hikari.users.PartialUser`-derived objects.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             If provided, sanitation for role mentions. If
             `hikari.undefined.UNDEFINED`, then the previous setting is
             not changed. If `builtins.True`, all valid role mentions will behave
@@ -1148,7 +1168,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         !!! note
             There is currently no documented way to clear attachments or edit
             attachments from a previously sent message on Discord's API. To
-            do this, `delete` the message and re-send it. This also applies
+            do this, delete the message and re-send it. This also applies
             to embed attachments.
 
         !!! warning
@@ -1205,7 +1225,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_message(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> None:
         """Delete a given message in a given channel.
@@ -1246,7 +1266,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_messages(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         /,
         *messages: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> None:
@@ -1294,7 +1314,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def add_reaction(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
         emoji: emojis.Emojiish,
     ) -> None:
@@ -1342,7 +1362,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_my_reaction(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
         emoji: emojis.Emojiish,
     ) -> None:
@@ -1386,7 +1406,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_all_reactions_for_emoji(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
         emoji: emojis.Emojiish,
     ) -> None:
@@ -1432,7 +1452,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_reaction(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
         emoji: emojis.Emojiish,
         user: snowflakes.SnowflakeishOr[users.PartialUser],
@@ -1482,7 +1502,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def delete_all_reactions(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
     ) -> None:
         """Delete all reactions from a message.
@@ -1525,7 +1545,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     def fetch_reactions_for_emoji(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         message: snowflakes.SnowflakeishOr[messages_.PartialMessage],
         emoji: emojis.Emojiish,
     ) -> iterators.LazyIterator[users.User]:
@@ -1548,9 +1568,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             An iterator to fetch the users.
 
         !!! note
-           This call is not a coroutine function, it returns a special type of
-           lazy iterator that will perform API calls as you iterate across it.
-           See `hikari.iterators` for the full API for this iterator type.
+            This call is not a coroutine function, it returns a special type of
+            lazy iterator that will perform API calls as you iterate across it.
+            See `hikari.iterators` for the full API for this iterator type.
 
         Raises
         ------
@@ -1584,10 +1604,10 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def create_webhook(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
         name: str,
         *,
-        avatar: typing.Optional[files.Resourceish] = None,
+        avatar: undefined.UndefinedOr[files.Resourceish] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> webhooks.Webhook:
         """Create webhook in a channel.
@@ -1691,7 +1711,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def fetch_channel_webhooks(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.TextChannel],
+        channel: snowflakes.SnowflakeishOr[channels_.TextChannel],
     ) -> typing.Sequence[webhooks.Webhook]:
         """Fetch all channel webhooks.
 
@@ -1779,7 +1799,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         token: undefined.UndefinedOr[str] = undefined.UNDEFINED,
         name: undefined.UndefinedOr[str] = undefined.UNDEFINED,
         avatar: undefined.UndefinedNoneOr[files.Resourceish] = undefined.UNDEFINED,
-        channel: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels.TextChannel]] = undefined.UNDEFINED,
+        channel: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels_.TextChannel]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> webhooks.Webhook:
         """Edit a webhook.
@@ -1896,10 +1916,10 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         tts: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
         ] = undefined.UNDEFINED,
     ) -> messages_.Message:
         """Execute a webhook.
@@ -1908,7 +1928,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         ----------
         webhook : hikari.snowflakes.SnowflakeishOr[hikari.webhooks.Webhook]
             The webhook to execute. This may be the object
-            or the ID of an existing webhook
+            or the ID of an existing webhook.
         token: builtins.str
             The webhook token.
         content : hikari.undefined.UndefinedOr[typing.Any]
@@ -1950,7 +1970,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
             If provided, whether the message should parse @everyone/@here
             mentions.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             If provided, and `builtins.True`, all user mentions will be detected.
             If provided, and `builtins.False`, all user mentions will be ignored
             if appearing in the message body.
@@ -1958,7 +1978,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             `hikari.snowflakes.Snowflake`, or
             `hikari.users.PartialUser` derivatives to enforce mentioning
             specific users.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             If provided, and `builtins.True`, all role mentions will be detected.
             If provided, and `builtins.False`, all role mentions will be ignored
             if appearing in the message body.
@@ -2018,7 +2038,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         hikari.errors.UnauthorizedError
             If you are unauthorized to make the request (invalid/missing token).
         hikari.errors.NotFoundError
-            If the channel is not found.
+            If the webhook is not found.
         hikari.errors.RateLimitTooLongError
             Raised in the event that a rate limit occurs that is
             longer than `max_rate_limit` when making a request.
@@ -2033,6 +2053,178 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         hikari.errors.InternalServerError
             If an internal error occurs on Discord while handling the request.
         """  # noqa: E501 - Line too long
+
+    @abc.abstractmethod
+    async def edit_webhook_message(
+        self,
+        webhook: snowflakes.SnowflakeishOr[webhooks.Webhook],
+        token: str,
+        message: snowflakes.SnowflakeishOr[messages_.Message],
+        content: undefined.UndefinedNoneOr[typing.Any] = undefined.UNDEFINED,
+        *,
+        embed: undefined.UndefinedNoneOr[embeds_.Embed] = undefined.UNDEFINED,
+        embeds: undefined.UndefinedNoneOr[typing.Sequence[embeds_.Embed]] = undefined.UNDEFINED,
+        mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        user_mentions: undefined.UndefinedOr[
+            typing.Union[snowflakes.SnowflakeishSequence[users.PartialUser], bool]
+        ] = undefined.UNDEFINED,
+        role_mentions: undefined.UndefinedOr[
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
+        ] = undefined.UNDEFINED,
+    ) -> messages_.Message:
+        """Edit a message sent by a webhook.
+
+        Parameters
+        ----------
+        webhook : hikari.snowflakes.SnowflakeishOr[hikari.webhooks.Webhook]
+            The webhook to execute. This may be the object
+            or the ID of an existing webhook.
+        token: builtins.str
+            The webhook token.
+        message : hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage]
+            The message to delete. This may be the object or the ID of
+            an existing message.
+        content : hikari.undefined.UndefinedNoneOr[typing.Any]
+            If provided, the message contents. If
+            `hikari.undefined.UNDEFINED`, then nothing will be sent
+            in the content. Any other value here will be cast to a
+            `builtins.str`.
+
+            If this is a `hikari.embeds.Embed` and no `embed` nor
+            no `embeds` kwarg is provided, then this will instead
+            update the embed. This allows for simpler syntax when
+            sending an embed alone.
+
+            Likewise, if this is a `hikari.files.Resource`, then the
+            content is instead treated as an attachment if no `attachment` and
+            no `attachments` kwargs are provided.
+
+        Other Parameters
+        ----------------
+        embed : hikari.undefined.UndefinedNoneOr[hikari.embeds.Embed]
+            If provided, the message embed.
+        embeds : hikari.undefined.UndefinedNoneOr[hikari.embeds.Embed]
+            If provided, the message embeds.
+        mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether the message should parse @everyone/@here
+            mentions.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
+            If provided, and `builtins.True`, all user mentions will be detected.
+            If provided, and `builtins.False`, all user mentions will be ignored
+            if appearing in the message body.
+            Alternatively this may be a collection of
+            `hikari.snowflakes.Snowflake`, or
+            `hikari.users.PartialUser` derivatives to enforce mentioning
+            specific users.
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
+            If provided, and `builtins.True`, all role mentions will be detected.
+            If provided, and `builtins.False`, all role mentions will be ignored
+            if appearing in the message body.
+            Alternatively this may be a collection of
+            `hikari.snowflakes.Snowflake`, or
+            `hikari.guilds.PartialRole` derivatives to enforce mentioning
+            specific roles.
+
+        !!! note
+            Mentioning everyone, roles, or users in message edits currently
+            will not send a push notification showing a new mention to people
+            on Discord. It will still highlight in their chat as if they
+            were mentioned, however.
+
+        !!! note
+            There is currently no documented way to clear attachments or edit
+            attachments from a previously sent message on Discord's API. To
+            do this, delete the message and re-send it. This also applies
+            to embed attachments.
+
+        !!! warning
+            If you specify one of `mentions_everyone`, `user_mentions`, or
+            `role_mentions`, then all others will default to `builtins.False`,
+            even if they were enabled previously.
+
+            This is a limitation of Discord's design. If in doubt, specify all three of
+            them each time.
+
+        Returns
+        -------
+        hikari.messages.Message
+            The edited message.
+
+        Raises
+        ------
+        builtins.ValueError
+            If more than 100 unique objects/entities are passed for
+            `role_mentions` or `user_mentions`.
+        builtins.TypeError
+            If both `attachment` and `attachments` are specified or if both
+            `embed` and `embeds` are specified.
+        hikari.errors.BadRequestError
+            This may be raised in several discrete situations, such as messages
+            being empty with no attachments or embeds; messages with more than
+            2000 characters in them, embeds that exceed one of the many embed
+            limits; too many attachments; attachments that are too large;
+            invalid image URLs in embeds; users in `user_mentions` not being
+            mentioned in the message content; roles in `role_mentions` not
+            being mentioned in the message content.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.NotFoundError
+            If the webhook or the message are not found.
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """  # noqa: E501 - Line too long
+
+    @abc.abstractmethod
+    async def delete_webhook_message(
+        self,
+        webhook: snowflakes.SnowflakeishOr[webhooks.Webhook],
+        token: str,
+        message: snowflakes.SnowflakeishOr[messages_.Message],
+    ) -> None:
+        """Delete a given message in a given channel.
+
+        Parameters
+        ----------
+        webhook : hikari.snowflakes.SnowflakeishOr[hikari.webhooks.Webhook]
+            The webhook to execute. This may be the object
+            or the ID of an existing webhook.
+        token: builtins.str
+            The webhook token.
+        message : hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage]
+            The message to delete. This may be the object or the ID of
+            an existing message.
+
+        Raises
+        ------
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.NotFoundError
+            If the webhook or the message are not found.
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
 
     @abc.abstractmethod
     async def fetch_gateway_url(self) -> str:
@@ -2274,9 +2466,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             The token's associated guilds.
 
         !!! note
-           This call is not a coroutine function, it returns a special type of
-           lazy iterator that will perform API calls as you iterate across it.
-           See `hikari.iterators` for the full API for this iterator type.
+            This call is not a coroutine function, it returns a special type of
+            lazy iterator that will perform API calls as you iterate across it.
+            See `hikari.iterators` for the full API for this iterator type.
 
         Raises
         ------
@@ -2335,9 +2527,8 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             If an internal error occurs on Discord while handling the request.
         """
 
-    # THIS IS AN OAUTH2 FLOW ONLY
     @abc.abstractmethod
-    async def create_dm_channel(self, user: snowflakes.SnowflakeishOr[users.PartialUser], /) -> channels.DMChannel:
+    async def create_dm_channel(self, user: snowflakes.SnowflakeishOr[users.PartialUser], /) -> channels_.DMChannel:
         """Create a DM channel with a user.
 
         Parameters
@@ -2410,9 +2601,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         user: snowflakes.SnowflakeishOr[users.PartialUser],
         *,
         nick: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-        roles: undefined.UndefinedOr[
-            typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]]
-        ] = undefined.UNDEFINED,
+        roles: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[guilds.PartialRole]] = undefined.UNDEFINED,
         mute: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         deaf: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
     ) -> typing.Optional[guilds.Member]:
@@ -2437,7 +2626,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             If provided, the nick to add to the user when he joins the guild.
 
             Requires the `MANAGE_NICKNAMES` permission on the guild.
-        roles : hikari.undefined.UndefinedOr[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]]]
+        roles : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole]]
             If provided, the roles to add to the user when he joins the guild.
             This may be a collection objects or IDs of existing roles.
 
@@ -2587,9 +2776,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             The guild's audit log.
 
         !!! note
-           This call is not a coroutine function, it returns a special type of
-           lazy iterator that will perform API calls as you iterate across it.
-           See `hikari.iterators` for the full API for this iterator type.
+            This call is not a coroutine function, it returns a special type of
+            lazy iterator that will perform API calls as you iterate across it.
+            See `hikari.iterators` for the full API for this iterator type.
 
         Raises
         ------
@@ -2707,9 +2896,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         name: str,
         image: files.Resourceish,
         *,
-        roles: undefined.UndefinedOr[
-            typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]]
-        ] = undefined.UNDEFINED,
+        roles: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[guilds.PartialRole]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> emojis.KnownCustomEmoji:
         """Create an emoji in a guild.
@@ -2727,7 +2914,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
 
         Other Parameters
         ----------------
-        roles : hikari.undefined.UndefinedOr[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]]]
+        roles : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole]]
             If provided, a collection of the roles that will be able to
             use this emoji. This can be a `hikari.guilds.PartialRole` or
             the ID of an existing role.
@@ -2773,9 +2960,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         emoji: snowflakes.SnowflakeishOr[emojis.CustomEmoji],
         *,
         name: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-        roles: undefined.UndefinedOr[
-            typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]]
-        ] = undefined.UNDEFINED,
+        roles: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[guilds.PartialRole]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> emojis.KnownCustomEmoji:
         """Edit an emoji in a guild.
@@ -2793,7 +2978,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         ----------------
         name : hikari.undefined.UndefinedOr[builtins.str]
             If provided, the new name for the emoji.
-        roles : hikari.undefined.UndefinedOr[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]]]
+        roles : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole]]
             If provided, the new collection of roles that will be able to
             use this emoji. This can be a `hikari.guilds.PartialRole` or
             the ID of an existing role.
@@ -2887,10 +3072,14 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             The guild builder to use. This will allow to create a guild
             later with `hikari.api.special_endpoints.GuildBuilder.create`.
 
+        !!! note
+            This endpoint can only be used by bots in less than 10 guilds.
+
         Raises
         ------
         hikari.errors.BadRequestError
-            If any of the fields that are passed have an invalid value.
+            If any of the fields that are passed have an invalid value or if you
+            call this as a bot that's in more than 10 guilds.
         hikari.errors.UnauthorizedError
             If you are unauthorized to make the request (invalid/missing token).
         hikari.errors.RateLimitTooLongError
@@ -3009,20 +3198,22 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         explicit_content_filter_level: undefined.UndefinedOr[
             guilds.GuildExplicitContentFilterLevel
         ] = undefined.UNDEFINED,
-        afk_channel: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels.GuildVoiceChannel]] = undefined.UNDEFINED,
+        afk_channel: undefined.UndefinedOr[
+            snowflakes.SnowflakeishOr[channels_.GuildVoiceChannel]
+        ] = undefined.UNDEFINED,
         afk_timeout: undefined.UndefinedOr[time.Intervalish] = undefined.UNDEFINED,
         icon: undefined.UndefinedNoneOr[files.Resourceish] = undefined.UNDEFINED,
         owner: undefined.UndefinedOr[snowflakes.SnowflakeishOr[users.PartialUser]] = undefined.UNDEFINED,
         splash: undefined.UndefinedNoneOr[files.Resourceish] = undefined.UNDEFINED,
         banner: undefined.UndefinedNoneOr[files.Resourceish] = undefined.UNDEFINED,
         system_channel: undefined.UndefinedNoneOr[
-            snowflakes.SnowflakeishOr[channels.GuildTextChannel]
+            snowflakes.SnowflakeishOr[channels_.GuildTextChannel]
         ] = undefined.UNDEFINED,
         rules_channel: undefined.UndefinedNoneOr[
-            snowflakes.SnowflakeishOr[channels.GuildTextChannel]
+            snowflakes.SnowflakeishOr[channels_.GuildTextChannel]
         ] = undefined.UNDEFINED,
         public_updates_channel: undefined.UndefinedNoneOr[
-            snowflakes.SnowflakeishOr[channels.GuildTextChannel]
+            snowflakes.SnowflakeishOr[channels_.GuildTextChannel]
         ] = undefined.UNDEFINED,
         preferred_locale: undefined.UndefinedOr[str] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
@@ -3058,7 +3249,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         owner : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]]]
             If provided, the new guild owner.
 
-            !!! warn
+            !!! warning
                 You need to be the owner of the server to use this.
         splash : hikari.undefined.UndefinedNoneOr[hikari.files.Resourceish]
             If provided, the new guild splash. Must be a 16:9 image and the
@@ -3146,7 +3337,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     @abc.abstractmethod
     async def fetch_guild_channels(
         self, guild: snowflakes.SnowflakeishOr[guilds.PartialGuild]
-    ) -> typing.Sequence[channels.GuildChannel]:
+    ) -> typing.Sequence[channels_.GuildChannel]:
         """Fetch the channels in a guild.
 
         Parameters
@@ -3192,11 +3383,11 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         nsfw: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         rate_limit_per_user: undefined.UndefinedOr[time.Intervalish] = undefined.UNDEFINED,
         permission_overwrites: undefined.UndefinedOr[
-            typing.Sequence[channels.PermissionOverwrite]
+            typing.Sequence[channels_.PermissionOverwrite]
         ] = undefined.UNDEFINED,
-        category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels.GuildCategory]] = undefined.UNDEFINED,
+        category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels_.GuildCategory]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-    ) -> channels.GuildTextChannel:
+    ) -> channels_.GuildTextChannel:
         """Create a text channel in a guild.
 
         Parameters
@@ -3270,11 +3461,11 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         nsfw: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         rate_limit_per_user: undefined.UndefinedOr[time.Intervalish] = undefined.UNDEFINED,
         permission_overwrites: undefined.UndefinedOr[
-            typing.Sequence[channels.PermissionOverwrite]
+            typing.Sequence[channels_.PermissionOverwrite]
         ] = undefined.UNDEFINED,
-        category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels.GuildCategory]] = undefined.UNDEFINED,
+        category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels_.GuildCategory]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-    ) -> channels.GuildNewsChannel:
+    ) -> channels_.GuildNewsChannel:
         """Create a news channel in a guild.
 
         Parameters
@@ -3347,11 +3538,11 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         user_limit: undefined.UndefinedOr[int] = undefined.UNDEFINED,
         bitrate: undefined.UndefinedOr[int] = undefined.UNDEFINED,
         permission_overwrites: undefined.UndefinedOr[
-            typing.Sequence[channels.PermissionOverwrite]
+            typing.Sequence[channels_.PermissionOverwrite]
         ] = undefined.UNDEFINED,
-        category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels.GuildCategory]] = undefined.UNDEFINED,
+        category: undefined.UndefinedOr[snowflakes.SnowflakeishOr[channels_.GuildCategory]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-    ) -> channels.GuildVoiceChannel:
+    ) -> channels_.GuildVoiceChannel:
         """Create a voice channel in a guild.
 
         Parameters
@@ -3421,10 +3612,10 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         *,
         position: undefined.UndefinedOr[int] = undefined.UNDEFINED,
         permission_overwrites: undefined.UndefinedOr[
-            typing.Sequence[channels.PermissionOverwrite]
+            typing.Sequence[channels_.PermissionOverwrite]
         ] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-    ) -> channels.GuildCategory:
+    ) -> channels_.GuildCategory:
         """Create a category in a guild.
 
         Parameters
@@ -3479,7 +3670,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
     async def reposition_channels(
         self,
         guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
-        positions: typing.Mapping[int, snowflakes.SnowflakeishOr[channels.GuildChannel]],
+        positions: typing.Mapping[int, snowflakes.SnowflakeishOr[channels_.GuildChannel]],
     ) -> None:
         """Reposition the channels in a guild.
 
@@ -3576,9 +3767,9 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             An iterator to fetch the members.
 
         !!! note
-           This call is not a coroutine function, it returns a special type of
-           lazy iterator that will perform API calls as you iterate across it.
-           See `hikari.iterators` for the full API for this iterator type.
+            This call is not a coroutine function, it returns a special type of
+            lazy iterator that will perform API calls as you iterate across it.
+            See `hikari.iterators` for the full API for this iterator type.
 
         Raises
         ------
@@ -3604,6 +3795,56 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             The exceptions on this endpoint will only be raised once the
             result is awaited or iterated over. Invoking this function
             itself will not raise anything.
+
+        !!! warning
+            This endpoint requires the `GUILD_MEMBERS` intent. Alternatively,
+            you can use `search_members` which doesn't require any intents.
+        """
+
+    @abc.abstractmethod
+    async def search_members(
+        self,
+        guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        name: str,
+    ) -> typing.Sequence[guilds.Member]:
+        """Search the members in a guild by nickname and username.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            The object or ID of the guild to search members in.
+        name : str
+            The query to match username(s) and nickname(s) against.
+
+        Returns
+        -------
+        typing.Sequence[hikari.guilds.Member]
+            A sequence of the members who matched the provided `name`.
+
+        Raises
+        ------
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.NotFoundError
+            If the guild is not found.
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+
+        !!! note
+            Unlike `RESTClient.fetch_members` this endpoint isn't paginated and
+            therefore will return all the members in one go rather than needing
+            to be asynchronously iterated over.
         """
 
     @abc.abstractmethod
@@ -3613,16 +3854,14 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         user: snowflakes.SnowflakeishOr[users.PartialUser],
         *,
         nick: undefined.UndefinedNoneOr[str] = undefined.UNDEFINED,
-        roles: undefined.UndefinedOr[
-            typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]]
-        ] = undefined.UNDEFINED,
+        roles: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[guilds.PartialRole]] = undefined.UNDEFINED,
         mute: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         deaf: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         voice_channel: undefined.UndefinedNoneOr[
-            snowflakes.SnowflakeishOr[channels.GuildVoiceChannel]
+            snowflakes.SnowflakeishOr[channels_.GuildVoiceChannel]
         ] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
-    ) -> None:
+    ) -> guilds.Member:
         """Edit a guild member.
 
         Parameters
@@ -3641,7 +3880,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             will remove the members nick.
 
             Requires the `MANAGE_NICKNAMES` permission.
-        roles : hikari.undefined.UndefinedOr[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]]]
+        roles : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole]]
             If provided, the new roles for the member.
 
             Requires the `MANAGE_ROLES` permission.
@@ -3668,6 +3907,11 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         reason : hikari.undefined.UndefinedOr[builtins.str]
             If provided, the reason that will be recorded in the audit logs.
             Maximum of 512 characters.
+
+        Returns
+        -------
+        hikari.guilds.Member
+            Object of the member that was updated.
 
         Raises
         ------
@@ -3919,7 +4163,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
 
         Other Parameters
         ----------------
-        delete_message_days : hikari.undefined.UndefinedNoneOr[int]
+        delete_message_days : hikari.undefined.UndefinedNoneOr[builtins.int]
             If provided, the number of days to delete messages for.
             This must be between 0 and 7.
         reason : hikari.undefined.UndefinedOr[builtins.str]
@@ -4365,9 +4609,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
         *,
         days: undefined.UndefinedOr[int] = undefined.UNDEFINED,
-        include_roles: undefined.UndefinedOr[
-            typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]]
-        ] = undefined.UNDEFINED,
+        include_roles: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[guilds.PartialRole]] = undefined.UNDEFINED,
     ) -> int:
         """Estimate the guild prune count.
 
@@ -4381,7 +4623,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         ----------------
         days : hikari.undefined.UndefinedOr[builtins.int]
             If provided, number of days to count prune for.
-        include_roles : hikari.undefined.UndefinedOr[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]]]
+        include_roles : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole]]]
             If provided, the role(s) to include. By default, this endpoint will
             not count users with roles. Providing roles using this attribute
             will make members with the specified roles also get included into
@@ -4424,9 +4666,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         *,
         days: undefined.UndefinedOr[int] = undefined.UNDEFINED,
         compute_prune_count: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
-        include_roles: undefined.UndefinedOr[
-            typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]]
-        ] = undefined.UNDEFINED,
+        include_roles: undefined.UndefinedOr[snowflakes.SnowflakeishSequence[guilds.PartialRole]] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> typing.Optional[int]:
         """Begin the guild prune.
@@ -4444,7 +4684,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         compute_prune_count: hikari.snowflakes.SnowflakeishOr[builtins.bool]
             If provided, whether to return the prune count. This is discouraged
             for large guilds.
-        include_roles : hikari.undefined.UndefinedOr[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]]]
+        include_roles : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole]]
             If provided, the role(s) to include. By default, this endpoint will
             not count users with roles. Providing roles using this attribute
             will make members with the specified roles also get included into
@@ -4581,12 +4821,6 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             The guild to fetch the integrations for. This may be the object
             or the ID of an existing guild.
 
-        Other Parameters
-        ----------------
-        include_applications : hikari.undefined.UndefinedOr[builtins.bool]
-            If specified, whether to include bot and webhook integrations as
-            well as the Youtube and Twitch integrations.
-
         Returns
         -------
         typing.Sequence[hikari.guilds.Integration]
@@ -4658,7 +4892,7 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         self,
         guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
         *,
-        channel: undefined.UndefinedNoneOr[snowflakes.SnowflakeishOr[channels.GuildChannel]] = undefined.UNDEFINED,
+        channel: undefined.UndefinedNoneOr[snowflakes.SnowflakeishOr[channels_.GuildChannel]] = undefined.UNDEFINED,
         enabled: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
     ) -> guilds.GuildWidget:
@@ -4710,6 +4944,110 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
         """
 
     @abc.abstractmethod
+    async def fetch_welcome_screen(self, guild: snowflakes.SnowflakeishOr[guilds.PartialGuild]) -> guilds.WelcomeScreen:
+        """Fetch a guild's welcome screen.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            Object or ID of the guild to fetch the welcome screen for.
+
+        Returns
+        -------
+        hikari.invites.WelcomeScreen
+            The requested welcome screen.
+
+        Raises
+        ------
+        hikari.errors.NotFoundError
+            If the guild is not found.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def edit_welcome_screen(
+        self,
+        guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        *,
+        description: undefined.UndefinedNoneOr[str] = undefined.UNDEFINED,
+        enabled: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        channels: undefined.UndefinedNoneOr[typing.Sequence[guilds.WelcomeChannel]] = undefined.UNDEFINED,
+    ) -> guilds.WelcomeScreen:
+        """Edit the welcome screen of a community guild.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            ID or object of the guild to edit the welcome screen for.
+
+        Other Parameters
+        ----------------
+        description : undefined.UndefinedNoneOr[builtins.str]
+            The description to set for the guild's welcome screen. This may be
+            `builtins.None` to unset the description or left as
+            `hikari.undefined.UNDEFINED` to leave the description unchanged.
+        enabled : undefined.UndefinedOr[builtins.bool]
+            Whether the guild's welcome screen should be enabled. Leave as
+            `hikari.undefined.UNDEFINED` to leave this unchanged.
+        channels : hikari.undefined.UndefinedNoneOr[typing.Sequence[hikari.guilds.WelcomeChanne;]]
+            A sequence of up to 5 public channels to set in this guild's welcome
+            screen. This may be passed as `builtins.None` to remove all welcome
+            channels or left as `hikari.undefined.UNDEFINED` to leave unchanged.
+
+            !!! note
+                Custom emojis may only be included in a guild's welcome channels
+                if it's boost status is tier 2 or above.
+
+        Returns
+        -------
+        hikari.guilds.WelcomeScreen
+            The edited guild welcome screen.
+
+        Raises
+        ------
+        hikari.errors.BadRequestError
+            If more than 5 welcome channels are provided or if a custom emoji
+            is included on a welcome channel in a guild that doesn't have tier
+            2 of above boost status or if a private channel is included as a
+            welcome channel.
+        hikari.errors.ForbiddenError
+            If you are missing the `MANAGE_GUILD` permission, are not part of
+            the guild or the guild doesn't have access to the community welcome
+            screen feature.
+        hikari.errors.NotFoundError
+            If the guild is not found.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
     async def fetch_vanity_url(self, guild: snowflakes.SnowflakeishOr[guilds.PartialGuild]) -> invites.VanityURL:
         """Fetch a guild's vanity url.
 
@@ -4730,6 +5068,327 @@ class RESTClient(traits.NetworkSettingsAware, abc.ABC):
             If you are not part of the guild.
         hikari.errors.NotFoundError
             If the guild is not found.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def create_template(
+        self,
+        guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        name: str,
+        *,
+        description: undefined.UndefinedNoneOr[str] = undefined.UNDEFINED,
+    ) -> templates.Template:
+        """Create a guild template.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            The guild to create a template from.
+        name : str
+            The name to use for the created template.
+
+        Other Parameters
+        ----------------
+        description : hikari.undefined.UndefinedNoneOr[builtins.str]
+            The description to set for the template.
+
+        Returns
+        -------
+        hikari.templates.Template
+            The object of the created template.
+
+        Raises
+        ------
+        hikari.errors.ForbiddenError
+            If you are not part of the guild.
+        hikari.errors.NotFoundError
+            If the guild is not found or you are missing the `MANAGE_GUILD`
+            permission.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def create_guild_from_template(
+        self,
+        template: templates.Templateish,
+        name: str,
+        *,
+        icon: undefined.UndefinedOr[files.Resourceish] = undefined.UNDEFINED,
+    ) -> guilds.RESTGuild:
+        """Make a guild from a template.
+
+        Parameters
+        ----------
+        template: hikari.templates.Templateish
+            The objecr or code of the template to create a guild based on.
+        name : builtins.str
+            The new guilds name.
+
+        Other Parameters
+        ----------------
+        icon : hikari.undefined.UndefinedOr[hikari.files.Resourceish]
+            If provided, the guild icon to set. Must be a 1024x1024 image or can
+            be an animated gif when the guild has the `ANIMATED_ICON` feature.
+
+        Returns
+        -------
+        hikari.guilds.RESTGuild
+            Object of the created guild.
+
+        !!! note
+            This endpoint can only be used by bots in less than 10 guilds.
+
+        Raises
+        ------
+        hikari.errors.BadRequestError
+            If any of the fields that are passed have an invalid value or if you
+            call this as a bot that's in more than 10 guilds.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def delete_template(
+        self,
+        guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        template: templates.Templateish,
+    ) -> templates.Template:
+        """Delete a guild template.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            The guild to delete a template in.
+        template : hikari.templates.Templateish
+            Object or ID of the template to delete.
+
+        Returns
+        -------
+        hikari.templates.Template
+            The deleted template's object.
+
+        Raises
+        ------
+        hikari.errors.ForbiddenError
+            If you are not part of the guild.
+        hikari.errors.NotFoundError
+            If the guild is not found or you are missing the `MANAGE_GUILD`
+            permission.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def edit_template(
+        self,
+        guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        template: templates.Templateish,
+        *,
+        name: undefined.UndefinedOr[str] = undefined.UNDEFINED,
+        description: undefined.UndefinedNoneOr[str] = undefined.UNDEFINED,
+    ) -> templates.Template:
+        """Modify a guild template.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            The guild to edit a template in.
+        template : hikari.templates.Templateish
+            Object or ID of the template to modify.
+
+        Other Parameters
+        ----------------
+        name : hikari.undefined.UndefinedOr[builtins.str]
+            The name to set for this template.
+        description : hikari.undefined.UndefinedNoneOr[builtins.str]
+            The description to set for the template.
+
+        Returns
+        -------
+        hikari.templates.Template
+            The object of the edited template.
+
+        Raises
+        ------
+        hikari.errors.ForbiddenError
+            If you are not part of the guild.
+        hikari.errors.NotFoundError
+            If the guild is not found or you are missing the `MANAGE_GUILD`
+            permission.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def fetch_template(self, template: templates.Templateish) -> templates.Template:
+        """Fetch a guild template.
+
+        Parameters
+        ----------
+        template : hikari.templates.Templateish
+            The object or string code of the template to fetch.
+
+        Returns
+        -------
+        hikari.templates.Template
+            The object of the found template.
+
+        Raises
+        ------
+        hikari.errors.NotFoundError
+            If the template was not found.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def fetch_guild_templates(
+        self, guild: snowflakes.SnowflakeishOr[guilds.PartialGuild]
+    ) -> typing.Sequence[templates.Template]:
+        """Fetch the templates for a guild.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            The object or ID of the guild to get the templates for.
+
+        Returns
+        -------
+        typing.Sequence[hikari.templates.Template]
+            A sequence of the found template objects.
+
+        Raises
+        ------
+        hikari.errors.ForbiddenError
+            If you are not part of the guild.
+        hikari.errors.NotFoundError
+            If the guild is not found or are missing the `MANAGE_GUILD`
+            permission.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+
+    @abc.abstractmethod
+    async def sync_guild_template(
+        self,
+        guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        template: templates.Templateish,
+    ) -> templates.Template:
+        """Create a guild template.
+
+        Parameters
+        ----------
+        guild : hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialGuild]
+            The guild to sync a template in
+        template : hikari.templates.Templateish
+            Object or ID of the template to sync.
+
+        Returns
+        -------
+        hikari.templates.Template
+            The object of the synced template.
+
+        Raises
+        ------
+        hikari.errors.ForbiddenError
+            If you are not part of the guild or are missing the `MANAGE_GUILD`
+            permission.
+        hikari.errors.NotFoundError
+            If the guild or template is not found.
         hikari.errors.UnauthorizedError
             If you are unauthorized to make the request (invalid/missing token).
         hikari.errors.RateLimitTooLongError

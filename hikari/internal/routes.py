@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -348,6 +349,9 @@ PATCH_GUILD_CHANNELS: typing.Final[Route] = Route(PATCH, "/guilds/{guild}/channe
 GET_GUILD_WIDGET: typing.Final[Route] = Route(GET, "/guilds/{guild}/widget")
 PATCH_GUILD_WIDGET: typing.Final[Route] = Route(PATCH, "/guilds/{guild}/widget")
 
+GET_GUILD_WELCOME_SCREEN: typing.Final[Route] = Route(GET, "/guilds/{guild}/welcome-screen")
+PATCH_GUILD_WELCOME_SCREEN: typing.Final[Route] = Route(PATCH, "/guilds/{guild}/welcome-screen")
+
 GET_GUILD_EMOJI: typing.Final[Route] = Route(GET, "/guilds/{guild}/emojis/{emoji}")
 PATCH_GUILD_EMOJI: typing.Final[Route] = Route(PATCH, "/guilds/{guild}/emojis/{emoji}")
 DELETE_GUILD_EMOJI: typing.Final[Route] = Route(DELETE, "/guilds/{guild}/emojis/{emoji}")
@@ -366,6 +370,8 @@ PUT_GUILD_MEMBER: typing.Final[Route] = Route(PUT, "/guilds/{guild}/members/{use
 
 GET_GUILD_MEMBERS: typing.Final[Route] = Route(GET, "/guilds/{guild}/members")
 DELETE_GUILD_MEMBER: typing.Final[Route] = Route(DELETE, "/guilds/{guild}/members/{user}")
+
+GET_GUILD_MEMBERS_SEARCH: typing.Final[Route] = Route(GET, "/guilds/{guild}/members/search")
 
 PUT_GUILD_MEMBER_ROLE: typing.Final[Route] = Route(PUT, "/guilds/{guild}/members/{user}/roles/{role}")
 DELETE_GUILD_MEMBER_ROLE: typing.Final[Route] = Route(DELETE, "/guilds/{guild}/members/{user}/roles/{role}")
@@ -389,6 +395,15 @@ GET_GUILD_VOICE_REGIONS: typing.Final[Route] = Route(GET, "/guilds/{guild}/regio
 GET_GUILD_WEBHOOKS: typing.Final[Route] = Route(GET, "/guilds/{guild}/webhooks")
 
 GET_GUILD_BANNER_IMAGE: typing.Final[Route] = Route(GET, "/guilds/{guild}/widget.png")
+
+# Templates
+DELETE_GUILD_TEMPLATE: typing.Final[Route] = Route(DELETE, "/guilds/{guild}/templates/{template}")
+GET_TEMPLATE: typing.Final[Route] = Route(GET, "/guilds/templates/{template}")
+GET_GUILD_TEMPLATES: typing.Final[Route] = Route(GET, "/guilds/{guild}/templates")
+PATCH_GUILD_TEMPLATE: typing.Final[Route] = Route(PATCH, "/guilds/{guild}/templates/{template}")
+POST_GUILD_TEMPLATES: typing.Final[Route] = Route(POST, "/guilds/{guild}/templates")
+POST_TEMPLATE: typing.Final[Route] = Route(POST, "/guilds/templates/{template}")
+PUT_GUILD_TEMPLATE: typing.Final[Route] = Route(PUT, "/guilds/{guild}/templates/{template}")
 
 # Invites
 GET_INVITE: typing.Final[Route] = Route(GET, "/invites/{invite_code}")
@@ -425,6 +440,8 @@ DELETE_WEBHOOK_WITH_TOKEN: typing.Final[Route] = Route(DELETE, "/webhooks/{webho
 POST_WEBHOOK_WITH_TOKEN: typing.Final[Route] = Route(POST, "/webhooks/{webhook}/{token}")
 POST_WEBHOOK_WITH_TOKEN_GITHUB: typing.Final[Route] = Route(POST, "/webhooks/{webhook}/{token}/github")
 POST_WEBHOOK_WITH_TOKEN_SLACK: typing.Final[Route] = Route(POST, "/webhooks/{webhook}/{token}/slack")
+PATCH_WEBHOOK_MESSAGE: typing.Final[Route] = Route(PATCH, "/webhooks/{webhook}/{token}/messages/{message}")
+DELETE_WEBHOOK_MESSAGE: typing.Final[Route] = Route(DELETE, "/webhooks/{webhook}/{token}/messages/{message}")
 
 # OAuth2 API
 GET_MY_APPLICATION: typing.Final[Route] = Route(GET, "/oauth2/applications/@me")

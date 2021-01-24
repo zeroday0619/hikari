@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -117,6 +118,12 @@ class RoleUpdateEvent(RoleEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring from ShardEvent>>.
+
+    old_role: typing.Optional[guilds.Role] = attr.ib()
+    """The old role object.
+
+    This will be `builtins.None` if the role missing from the cache.
+    """
 
     role: guilds.Role = attr.ib()
     """Role that was updated.

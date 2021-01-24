@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,41 +24,32 @@
 
 from __future__ import annotations
 
-import threading
-import traceback
-
-__all__: typing.List[str] = ["BotApp", "LoggerLevelT"]
+__all__: typing.List[str] = ["BotApp"]
 
 import asyncio
-import concurrent.futures
 import contextlib
 import datetime
 import logging
 import math
 import signal
 import sys
+import threading
+import traceback
 import types
 import typing
 import warnings
 
 from hikari import config
 from hikari import errors
-from hikari import event_stream
 from hikari import intents as intents_
 from hikari import presences
 from hikari import traits
 from hikari import undefined
-from hikari import users
-from hikari.api import cache as cache_
-from hikari.api import chunker as chunker_
-from hikari.api import entity_factory as entity_factory_
-from hikari.api import event_dispatcher
-from hikari.api import event_factory as event_factory_
-from hikari.api import shard as gateway_shard
-from hikari.api import voice as voice_
-from hikari.events import lifetime_events
+from hikari.api import event_manager as event_manager_
+from hikari.impl import cache as cache_impl
 from hikari.impl import entity_factory as entity_factory_impl
 from hikari.impl import event_factory as event_factory_impl
+from hikari.impl import event_manager as event_manager_impl
 from hikari.impl import rest as rest_impl
 from hikari.impl import shard as shard_impl
 from hikari.impl import voice as voice_impl
@@ -66,32 +58,22 @@ from hikari.internal import time
 from hikari.internal import ux
 
 if typing.TYPE_CHECKING:
-    from hikari.api import cache
-    from hikari.api import chunker
+    import concurrent.futures
+
+    from hikari import event_stream
+    from hikari import users
+    from hikari.api import cache as cache_
+    from hikari.api import entity_factory as entity_factory_
+    from hikari.api import event_factory as event_factory_
     from hikari.api import rest as rest_
-    from hikari.api import shard
-    from hikari.impl import event_manager_base
-
-LoggerLevelT = typing.Union[
-    int,
-    typing.Literal["TRACE_HIKARI"],
-    typing.Literal["DEBUG"],
-    typing.Literal["INFO"],
-    typing.Literal["WARNING"],
-    typing.Literal["ERROR"],
-    typing.Literal["CRITICAL"],
-]
-"""Type-hint for a valid logging level.
-
-This may be an `int` logging level (e.g. `logging.DEBUG`, `logging.CRITICAL`),
-or a capitalized string that matches one of `"TRACE_HIKARI"`, `"DEBUG"`,
-`"INFO"`, `"WARNING", `"ERROR"`, or `"CRITICAL"`.
-"""
+    from hikari.api import shard as gateway_shard
+    from hikari.api import voice as voice_
+    from hikari.internal import data_binding
 
 _LOGGER: typing.Final[logging.Logger] = logging.getLogger("hikari")
 
 
-class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
+class BotApp(traits.BotAware, event_manager_.EventManager):
     """Basic auto-sharding bot implementation.
 
     This is the class you will want to use to start, control, and build a bot
@@ -119,18 +101,6 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         The package to search for a `banner.txt` in. Defaults to `"hikari"` for
         the `"hikari/banner.txt"` banner.
         Setting this to `builtins.None` will disable the banner being shown.
-    chunking_limit : typing.Optional[builtins.int]
-        Defaults to `200`. The maximum amount of requests that this chunker
-        should store information about for each shard.
-    enable_cache : builtins.bool
-        Defaults to `builtins.True`. If `builtins.False`, the application is
-        configured to be mostly stateless. This means almost all cache calls
-        will yield an empty or `builtins.None` value, and you will be left to
-        rely on the `REST` API only.
-
-        This can be a viable alternative if you are providing a custom cache
-        implementation, or simply do not want the overhead of maintaining a
-        state in your application.
     executor : typing.Optional[concurrent.futures.Executor]
         Defaults to `builtins.None`. If non-`builtins.None`, then this executor
         is used instead of the `concurrent.futures.ThreadPoolExecutor` attached
@@ -148,6 +118,8 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         will __force__ colour to be used in console-based output. Specifying a
         `"CLICOLOR_FORCE"` environment variable with a non-`"0"` value will
         override this setting.
+    cache_settings : typing.Optional[hikari.config.CacheSettings]
+        Optional cache settings. If unspecified, will use the defaults.
     http_settings : typing.Optional[hikari.config.HTTPSettings]
         Optional custom HTTP configuration settings to use. Allows you to
         customise functionality such as whether SSL-verification is enabled,
@@ -219,32 +191,25 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
     ```py
     import os
 
-    from logging.config import dictConfig
-    from hikari import Bot, Intents
-
-    bot = Bot(token=os.environ["BOT_TOKEN"], intents=Intents.ALL, logs="INFO")
+    import hikari
 
     # We want to make gateway logs output as DEBUG, and TRACE for all ratelimit content.
-    dictConfig({
-        "version": 1,
-        "incremental": True,
-        "loggers": {
-            "hikari.gateway": {
-                "level": "DEBUG"
-            },
-            "hikari.ratelimits": {
-                "level": "TRACE_HIKARI"
+    bot = hikari.Bot(
+        token=os.environ["BOT_TOKEN"],
+        logs={
+            "version": 1,
+            "incremental": True,
+            "loggers": {
+                "hikari.gateway": {"level": "DEBUG"},
+                "hikari.ratelimits": {"level": "TRACE_HIKARI"},
             },
         },
-    })
+    )
     ```
-
     """
 
     __slots__: typing.Sequence[str] = (
-        "_banner",
         "_cache",
-        "_chunker",
         "_closing_event",
         "_closed",
         "_entity_factory",
@@ -253,8 +218,8 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         "_executor",
         "_http_settings",
         "_intents",
+        "_is_alive",
         "_proxy_settings",
-        "_raw_event_consumer",
         "_rest",
         "_shards",
         "_token",
@@ -268,13 +233,12 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         *,
         allow_color: bool = True,
         banner: typing.Optional[str] = "hikari",
-        chunking_limit: int = 200,
-        enable_cache: bool = True,
         executor: typing.Optional[concurrent.futures.Executor] = None,
         force_color: bool = False,
+        cache_settings: typing.Optional[config.CacheSettings] = None,
         http_settings: typing.Optional[config.HTTPSettings] = None,
         intents: intents_.Intents = intents_.Intents.ALL_UNPRIVILEGED,
-        logs: typing.Union[None, LoggerLevelT, typing.Dict[str, typing.Any]] = "INFO",
+        logs: typing.Union[None, int, str, typing.Dict[str, typing.Any]] = "INFO",
         max_rate_limit: float = 300,
         proxy_settings: typing.Optional[config.ProxySettings] = None,
         rest_url: typing.Optional[str] = None,
@@ -284,44 +248,21 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         self.print_banner(banner, allow_color, force_color)
 
         # Settings and state
-        self._banner = banner
         self._closing_event = asyncio.Event()
         self._closed = False
+        self._is_alive = False
         self._executor = executor
         self._http_settings = http_settings if http_settings is not None else config.HTTPSettings()
         self._intents = intents
         self._proxy_settings = proxy_settings if proxy_settings is not None else config.ProxySettings()
         self._token = token
 
-        # Caching, chunking, and event subsystems.
-        self._cache: cache.Cache
-        self._chunker: chunker.GuildChunker
-        self._events: event_dispatcher.EventDispatcher
-        events_obj: event_manager_base.EventManagerBase
+        # Caching
+        cache_settings = cache_settings if cache_settings is not None else config.CacheSettings()
+        self._cache = cache_impl.CacheImpl(self, cache_settings)
 
-        if enable_cache:
-            from hikari.impl import stateful_cache
-            from hikari.impl import stateful_event_manager
-            from hikari.impl import stateful_guild_chunker
-
-            cache_obj = stateful_cache.StatefulCacheImpl(self, intents)
-            self._cache = cache_obj
-            self._chunker = stateful_guild_chunker.StatefulGuildChunkerImpl(self, chunking_limit)
-
-            events_obj = stateful_event_manager.StatefulEventManagerImpl(self, cache_obj, intents)
-            self._raw_event_consumer = events_obj.consume_raw_event
-            self._events = events_obj
-        else:
-            from hikari.impl import stateless_cache
-            from hikari.impl import stateless_event_manager
-            from hikari.impl import stateless_guild_chunker
-
-            self._cache = stateless_cache.StatelessCacheImpl()
-            self._chunker = stateless_guild_chunker.StatelessGuildChunkerImpl()
-
-            events_obj = stateless_event_manager.StatelessEventManagerImpl(self, intents)
-            self._raw_event_consumer = events_obj.consume_raw_event
-            self._events = events_obj
+        # Event handling
+        self._events = event_manager_impl.EventManagerImpl(self, cache=self._cache)
 
         # Entity creation
         self._entity_factory = entity_factory_impl.EntityFactoryImpl(self)
@@ -330,7 +271,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         self._event_factory = event_factory_impl.EventFactoryImpl(self)
 
         # Voice subsystem
-        self._voice = voice_impl.VoiceComponentImpl(self, self._events)
+        self._voice = voice_impl.VoiceComponentImpl(self)
 
         # RESTful API.
         self._rest = rest_impl.RESTClientImpl(
@@ -347,7 +288,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
 
         # We populate these on startup instead, as we need to possibly make some
         # HTTP requests to determine what to put in this mapping.
-        self._shards: typing.Dict[int, shard.GatewayShard] = {}
+        self._shards: typing.Dict[int, gateway_shard.GatewayShard] = {}
         self.shards: typing.Mapping[int, gateway_shard.GatewayShard] = types.MappingProxyType(self._shards)
 
     @property
@@ -355,11 +296,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         return self._cache
 
     @property
-    def chunker(self) -> chunker_.GuildChunker:
-        return self._chunker
-
-    @property
-    def dispatcher(self) -> event_dispatcher.EventDispatcher:
+    def event_manager(self) -> event_manager_.EventManager:
         return self._events
 
     @property
@@ -381,7 +318,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
     @property
     def heartbeat_latency(self) -> float:
         latencies = [s.heartbeat_latency for s in self._shards.values() if not math.isnan(s.heartbeat_latency)]
-        return sum(latencies) if latencies else float("nan")
+        return sum(latencies) / len(latencies) if latencies else float("nan")
 
     @property
     def http_settings(self) -> config.HTTPSettings:
@@ -413,6 +350,24 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
     def rest(self) -> rest_.RESTClient:
         return self._rest
 
+    @property
+    def is_alive(self) -> bool:
+        return self._is_alive
+
+    def add_raw_consumer(self, name: str, consumer: event_manager_.ConsumerT, /) -> None:
+        self._events.add_raw_consumer(name, consumer)
+
+    def get_raw_consumers(self, name: str, /) -> typing.Sequence[event_manager_.ConsumerT]:
+        return self._events.get_raw_consumers(name)
+
+    def remove_raw_consumer(self, name: str, consumer: event_manager_.ConsumerT, /) -> None:
+        self._events.remove_raw_consumer(name, consumer)
+
+    def consume_raw_event(
+        self, shard: gateway_shard.GatewayShard, event_name: str, payload: data_binding.JSONObject
+    ) -> None:
+        self._events.consume_raw_event(shard, event_name, payload)
+
     async def close(self, force: bool = True) -> None:
         """Kill the application by shutting all components down."""
         if not self._closing_event.is_set():
@@ -441,13 +396,12 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
                     }
                 )
 
-        await self.dispatch(lifetime_events.StoppingEvent(app=self))
+        await self.dispatch(self.event_factory.deserialize_stopping_event())
 
         _LOGGER.log(ux.TRACE, "StoppingEvent dispatch completed, now beginning termination")
 
         calls = [
             ("rest", self._rest.close()),
-            ("chunker", self._chunker.close()),
             ("voice handler", self._voice.close()),
             *((f"shard {s.id}", s.close()) for s in self._shards.values()),
         ]
@@ -458,17 +412,19 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         # Join any shards until they finish
         await aio.all_of(*(s.join() for s in self._shards.values()), timeout=len(self._shards))
 
-        # Clear out shard map
+        # Clear out cache and shard map
+        self._cache.clear()
         self._shards.clear()
+        self._is_alive = False
 
-        await self.dispatch(lifetime_events.StoppedEvent(app=self))
+        await self.dispatch(self.event_factory.deserialize_stopped_event())
 
-    def dispatch(self, event: event_dispatcher.EventT_inv) -> asyncio.Future[typing.Any]:
+    def dispatch(self, event: event_manager_.EventT_inv) -> asyncio.Future[typing.Any]:
         return self._events.dispatch(event)
 
     def get_listeners(
-        self, event_type: typing.Type[event_dispatcher.EventT_co], *, polymorphic: bool = True
-    ) -> typing.Collection[event_dispatcher.CallbackT[event_dispatcher.EventT_co]]:
+        self, event_type: typing.Type[event_manager_.EventT_co], *, polymorphic: bool = True
+    ) -> typing.Collection[event_manager_.CallbackT[event_manager_.EventT_co]]:
         return self._events.get_listeners(event_type, polymorphic=polymorphic)
 
     async def join(self, until_close: bool = True) -> None:
@@ -479,9 +435,9 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         await aio.first_completed(*awaitables)
 
     def listen(
-        self, event_type: typing.Optional[typing.Type[event_dispatcher.EventT_co]] = None
+        self, event_type: typing.Optional[typing.Type[event_manager_.EventT_co]] = None
     ) -> typing.Callable[
-        [event_dispatcher.CallbackT[event_dispatcher.EventT_co]], event_dispatcher.CallbackT[event_dispatcher.EventT_co]
+        [event_manager_.CallbackT[event_manager_.EventT_co]], event_manager_.CallbackT[event_manager_.EventT_co]
     ]:
         return self._events.listen(event_type)
 
@@ -659,7 +615,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
             # Signals on POSIX only occur on the main thread usually, too, so we need to ensure this is
             # threadsafe if we want the user's application to still shut down if on a separate thread.
             # We log native thread IDs purely for debugging purposes.
-            if _LOGGER.getEffectiveLevel() <= ux.TRACE:
+            if _LOGGER.isEnabledFor(ux.TRACE):
                 _LOGGER.log(
                     ux.TRACE,
                     "interrupt %s occurred on thread %s, bot on thread %s will be notified to shut down shortly\n"
@@ -732,7 +688,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         idle_since: typing.Optional[datetime.datetime] = None,
         ignore_session_start_limit: bool = False,
         large_threshold: int = 250,
-        shard_ids: typing.Optional[typing.Set[int]] = None,
+        shard_ids: typing.Optional[typing.AbstractSet[int]] = None,
         shard_count: typing.Optional[int] = None,
         status: presences.Status = presences.Status.ONLINE,
     ) -> None:
@@ -789,8 +745,9 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
                 ux.check_for_updates(self._http_settings, self._proxy_settings),
                 name="check for package updates",
             )
+
         requirements_task = asyncio.create_task(self._rest.fetch_gateway_bot(), name="fetch gateway sharding settings")
-        await self.dispatch(lifetime_events.StartingEvent(app=self))
+        await self.dispatch(self.event_factory.deserialize_starting_event())
         requirements = await requirements_task
 
         if shard_count is None:
@@ -811,6 +768,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
             )
             raise errors.GatewayError("Attempted to start more sessions than were allowed in the given time-window")
 
+        self._is_alive = True
         _LOGGER.info(
             "planning to start %s session%s... you can start %s session%s before the next window starts at %s",
             len(shard_ids),
@@ -833,7 +791,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
                 continue
             if self._shards:
                 close_waiter = asyncio.create_task(self._closing_event.wait())
-                shard_joiners = [asyncio.ensure_future(s.join()) for s in self._shards.values()]
+                shard_joiners = [s.join() for s in self._shards.values()]
 
                 try:
                     # Attempt to wait for all started shards, for 5 seconds, along with the close
@@ -854,7 +812,8 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
                 except asyncio.TimeoutError:
                     # If any shards stopped silently, we should close.
                     if any(not s.is_alive for s in self._shards.values()):
-                        _LOGGER.info("one of the shards has been manually shut down (no error), will now shut down")
+                        _LOGGER.warning("one of the shards has been manually shut down (no error), will now shut down")
+                        await self.close()
                         return
                     # new window starts.
 
@@ -862,7 +821,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
                     _LOGGER.critical("an exception occurred in one of the started shards during bot startup: %r", ex)
                     raise
 
-            started_shards = await aio.all_of(
+            await aio.all_of(
                 *(
                     self._start_one_shard(
                         activity=activity,
@@ -879,39 +838,40 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
                 )
             )
 
-            for started_shard in started_shards:
-                self._shards[started_shard.id] = started_shard
-
-        await self.dispatch(lifetime_events.StartedEvent(app=self))
+        await self.dispatch(self.event_factory.deserialize_started_event())
 
         _LOGGER.info("application started successfully in approx %.2f seconds", time.monotonic() - start_time)
 
+    def _check_if_alive(self) -> None:
+        if not self._is_alive:
+            raise errors.ComponentNotRunningError("bot is not running so it cannot be interacted with")
+
     def stream(
         self,
-        event_type: typing.Type[event_dispatcher.EventT_co],
+        event_type: typing.Type[event_manager_.EventT_co],
         /,
         timeout: typing.Union[float, int, None],
         limit: typing.Optional[int] = None,
-    ) -> event_stream.Streamer[event_dispatcher.EventT_co]:
+    ) -> event_stream.Streamer[event_manager_.EventT_co]:
+        self._check_if_alive()
         return self._events.stream(event_type, timeout=timeout, limit=limit)
 
     def subscribe(
-        self, event_type: typing.Type[typing.Any], callback: event_dispatcher.CallbackT[typing.Any]
-    ) -> event_dispatcher.CallbackT[typing.Any]:
+        self, event_type: typing.Type[typing.Any], callback: event_manager_.CallbackT[typing.Any]
+    ) -> event_manager_.CallbackT[typing.Any]:
         return self._events.subscribe(event_type, callback)
 
-    def unsubscribe(
-        self, event_type: typing.Type[typing.Any], callback: event_dispatcher.CallbackT[typing.Any]
-    ) -> None:
+    def unsubscribe(self, event_type: typing.Type[typing.Any], callback: event_manager_.CallbackT[typing.Any]) -> None:
         self._events.unsubscribe(event_type, callback)
 
     async def wait_for(
         self,
-        event_type: typing.Type[event_dispatcher.EventT_co],
+        event_type: typing.Type[event_manager_.EventT_co],
         /,
         timeout: typing.Union[float, int, None],
-        predicate: typing.Optional[event_dispatcher.PredicateT[event_dispatcher.EventT_co]] = None,
-    ) -> event_dispatcher.EventT_co:
+        predicate: typing.Optional[event_manager_.PredicateT[event_manager_.EventT_co]] = None,
+    ) -> event_manager_.EventT_co:
+        self._check_if_alive()
         return await self._events.wait_for(event_type, timeout=timeout, predicate=predicate)
 
     async def update_presence(
@@ -922,6 +882,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         activity: undefined.UndefinedNoneOr[presences.Activity] = undefined.UNDEFINED,
         afk: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
     ) -> None:
+        self._check_if_alive()
         self._validate_activity(activity)
 
         coros = [
@@ -930,6 +891,9 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         ]
 
         await aio.all_of(*coros)
+
+    # TODO: Update voice state
+    # TODO: Request guild chunk
 
     async def _set_close_flag(self, signame: str, signum: int) -> None:
         # This needs to be a coroutine, as the closing event is not threadsafe, so we have no way to set this
@@ -953,7 +917,8 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
         url: str,
     ) -> shard_impl.GatewayShardImpl:
         new_shard = shard_impl.GatewayShardImpl(
-            event_consumer=self._raw_event_consumer,
+            event_manager=self._events,
+            event_factory=self._event_factory,
             http_settings=self._http_settings,
             initial_activity=activity,
             initial_is_afk=afk,
@@ -967,6 +932,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
             token=self._token,
             url=url,
         )
+        self._shards[new_shard.id] = new_shard
 
         start = time.monotonic()
         await aio.first_completed(new_shard.start(), self._closing_event.wait())
@@ -976,7 +942,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
             _LOGGER.debug("Shard %s started successfully in %.1fms", shard_id, (end - start) * 1_000)
             return new_shard
 
-        raise errors.GatewayError(f"Shard {shard_id} shut down immediately when starting")
+        raise errors.GatewayError(f"shard {shard_id} shut down immediately when starting")
 
     @staticmethod
     def _destroy_loop(loop: asyncio.AbstractEventLoop) -> None:
@@ -1028,14 +994,7 @@ class BotApp(traits.BotAware, event_dispatcher.EventDispatcher):
 
         # If you ever change where this is called from, make sure to check the stacklevels are correct
         # or the code preview in the warning will be wrong...
-        if activity.type is presences.ActivityType.WATCHING:
-            warnings.warn(
-                "The WATCHING activity type is not officially recognised by Discord and may be removed from Hikari in "
-                "a future release.",
-                category=PendingDeprecationWarning,
-                stacklevel=3,
-            )
-        elif activity.type is presences.ActivityType.CUSTOM:
+        if activity.type is presences.ActivityType.CUSTOM:
             warnings.warn(
                 "The CUSTOM activity type is not supported by bots at the time of writing, and may therefore not have "
                 "any effect if used.",

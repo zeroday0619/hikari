@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,9 +31,12 @@ __all__: typing.List[str] = [
     "Attachment",
     "Reaction",
     "MessageActivity",
-    "MessageCrosspost",
+    "Mentions",
+    "MessageReference",
     "PartialMessage",
     "Message",
+    "StickerFormatType",
+    "Sticker",
 ]
 
 import typing
@@ -40,22 +44,25 @@ import typing
 import attr
 
 from hikari import files
+from hikari import guilds
+from hikari import intents
 from hikari import snowflakes
+from hikari import traits
 from hikari import undefined
 from hikari import urls
 from hikari.internal import attr_extensions
 from hikari.internal import enums
+from hikari.internal import routes
 
 if typing.TYPE_CHECKING:
     import datetime
 
-    from hikari import applications
     from hikari import channels
     from hikari import embeds as embeds_
     from hikari import emojis as emojis_
-    from hikari import guilds
-    from hikari import traits
-    from hikari import users
+    from hikari import users as users_
+
+_T = typing.TypeVar("_T")
 
 
 @typing.final
@@ -101,6 +108,9 @@ class MessageType(int, enums.Enum):
     CHANNEL_FOLLOW_ADD = 12
     """Channel follow add."""
 
+    REPLY = 19
+    """A message that replies to another message."""
+
 
 @typing.final
 class MessageFlag(enums.Flag):
@@ -143,6 +153,20 @@ class MessageActivityType(int, enums.Enum):
 
     JOIN_REQUEST = 5
     """Request to join an activity."""
+
+
+@typing.final
+class StickerFormatType(int, enums.Enum):
+    """The formats types of a sticker's asset."""
+
+    PNG = 1
+    """A PNG sticker."""
+
+    APNG = 2
+    """A animated PNG sticker."""
+
+    LOTTIE = 3
+    """A lottie sticker."""
 
 
 @attr_extensions.with_copy
@@ -198,6 +222,44 @@ class Reaction:
 
 
 @attr_extensions.with_copy
+@attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
+class Sticker(snowflakes.Unique):
+    """Represents the stickers found attached to messages on Discord."""
+
+    id: snowflakes.Snowflake = attr.ib(eq=True, hash=True, repr=True)
+    """The ID of this entity."""
+
+    pack_id: snowflakes.Snowflake = attr.ib(eq=False, hash=False, repr=True)
+    """ID of the package this sticker belongs to."""
+
+    name: str = attr.ib(eq=False, hash=False, repr=True)
+    """The name of this sticker."""
+
+    description: str = attr.ib(eq=False, hash=False, repr=False)
+    """The description of this sticker."""
+
+    tags: typing.Sequence[str] = attr.ib(eq=False, hash=False, repr=True)
+    """A sequence of this sticker's tags."""
+
+    asset_hash: str = attr.ib(eq=False, hash=False, repr=False)
+    """The hash of this sticker's asset.
+
+    !!! note
+        The CDN endpoint for this hash is currently undocumented.
+    """
+
+    preview_asset_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
+    """The hash of this sticker's preview asset.
+
+    !!! note
+        The CDN endpoint for this hash is currently undocumented.
+    """
+
+    format_type: typing.Union[StickerFormatType, int] = attr.ib(eq=False, hash=False, repr=True)
+    """The format of this sticker's asset."""
+
+
+@attr_extensions.with_copy
 @attr.s(eq=True, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
 class MessageActivity:
     """Represents the activity of a rich presence-enabled message."""
@@ -211,37 +273,220 @@ class MessageActivity:
 
 @attr_extensions.with_copy
 @attr.s(eq=True, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
-class MessageCrosspost:
-    """Represents information about a cross-posted message.
+class Mentions:
+    """Description of mentions that exist in the message."""
 
-    This is a message that is sent in one channel/guild and may be
-    "published" to another.
+    # We refer back to the containing message so that we can provide info about
+    # entities that were not notified, and provide access to cached roles
+    # through this mechanism.
+    _message: PartialMessage = attr.ib()
+
+    users: undefined.UndefinedOr[typing.Mapping[snowflakes.Snowflake, users_.User]] = attr.ib()
+    """Users who were notified by their mention in the message."""
+
+    role_ids: undefined.UndefinedOr[typing.Sequence[snowflakes.Snowflake]] = attr.ib()
+    """IDs of roles that were notified by their mention in the message."""
+
+    channels: undefined.UndefinedOr[typing.Mapping[snowflakes.Snowflake, channels.PartialChannel]] = attr.ib()
+    """Channel mentions that reference channels in the target crosspost's guild.
+
+    If the message is not crossposted, this will always be empty.
+    """
+
+    everyone: undefined.UndefinedOr[bool] = attr.ib()
+    """Whether the message notifies using `@everyone` or `@here`."""
+
+    @property
+    def channels_ids(self) -> undefined.UndefinedOr[typing.Sequence[snowflakes.Snowflake]]:
+        if self.channels is undefined.UNDEFINED:
+            return undefined.UNDEFINED
+
+        return list(self.channels.keys())
+
+    @property
+    def user_ids(self) -> undefined.UndefinedOr[typing.Sequence[snowflakes.Snowflake]]:
+        if self.users is undefined.UNDEFINED:
+            return undefined.UNDEFINED
+
+        return list(self.users.keys())
+
+    @property
+    def members(self) -> undefined.UndefinedOr[typing.Mapping[snowflakes.Snowflake, guilds.Member]]:
+        """Discover any cached members notified by this message.
+
+        If this message was sent in a DM, this will always be empty.
+
+        !!! warning
+            This will only return valid results on gateway events. For REST
+            endpoints, this will potentially be empty. This is a limitation of
+            Discord's API, as they do not consistently notify of the ID of the
+            guild a message was sent in.
+
+        !!! note
+            If you are using a stateless application such as a stateless bot
+            or a REST-only client, this will always be empty. Furthermore,
+            if you are running a stateful bot and have the GUILD_MEMBERS
+            intent disabled, this will also be empty.
+
+            Members that are not cached will not appear in this mapping. This
+            means that there is a very small chance that some users provided
+            in `notified_users` may not be present here.
+        """
+        if self.users is undefined.UNDEFINED:
+            return undefined.UNDEFINED
+
+        if self._ensure_cache(intents.Intents.GUILDS, True):
+            guild_id = typing.cast(snowflakes.Snowflake, self._message.guild_id)
+            app = typing.cast(traits.CacheAware, self._message.app)
+
+            return self._map_cache_maybe_discover(
+                self.users,
+                lambda user_id: app.cache.get_member(guild_id, user_id),
+            )
+
+        return {}
+
+    @property
+    def roles(self) -> typing.Mapping[snowflakes.Snowflake, guilds.Role]:
+        """Attempt to look up the roles that are notified by this message.
+
+        If this message was sent in a DM, this will always be empty.
+
+        !!! warning
+            This will only return valid results on gateway events. For REST
+            endpoints, this will potentially be empty. This is a limitation of
+            Discord's API, as they do not consistently notify of the ID of the
+            guild a message was sent in.
+
+        !!! note
+            If you are using a stateless application such as a stateless bot
+            or a REST-only client, this will always be empty. Furthermore,
+            if you are running a stateful bot and have the GUILD intent
+            disabled, this will also be empty.
+
+            Roles that are not cached will not appear in this mapping. This
+            means that there is a very small chance that some role IDs provided
+            in `notifies_role_ids` may not be present here. This is a limitation
+            of Discord, again.
+        """
+        if self._ensure_cache(intents.Intents.GUILDS, True):
+            app = typing.cast(traits.CacheAware, self._message.app)
+
+            return self._map_cache_maybe_discover(
+                self.roles,
+                app.cache.get_role,
+            )
+
+        return {}
+
+    def _ensure_cache(self, intents_required: intents.Intents, needs_guild: bool) -> bool:
+        app = self._message.app
+
+        return bool(
+            isinstance(app, traits.ShardAware)
+            and isinstance(app, traits.CacheAware)
+            and (app.intents & intents_required) == intents_required
+            and (not needs_guild or self._message.guild_id)
+        )
+
+    @staticmethod
+    def _map_cache_maybe_discover(
+        ids: typing.Iterable[snowflakes.Snowflake],
+        cache_call: typing.Callable[[snowflakes.Snowflake], typing.Optional[_T]],
+    ) -> typing.Dict[snowflakes.Snowflake, _T]:
+        results: typing.Dict[snowflakes.Snowflake, _T] = {}
+        for id_ in ids:
+            obj = cache_call(id_)
+            if obj is not None:
+                results[id_] = obj
+        return results
+
+
+@attr_extensions.with_copy
+@attr.s(eq=True, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
+class MessageReference:
+    """Represents information about a referenced message.
+
+    This will be included in crossposted messages, channel follow add
+    message, pin add messages and replies.
     """
 
     app: traits.RESTAware = attr.ib(repr=False, eq=False, hash=False, metadata={attr_extensions.SKIP_DEEP_COPY: True})
     """The client application that models may use for procedures."""
 
-    # TODO: get clarification on this! If it cannot happen, this should subclass PartialMessage too.
     id: typing.Optional[snowflakes.Snowflake] = attr.ib(repr=True)
-    """The ID of the message.
+    """The ID of the original message.
 
-    !!! warning
-        This may be `builtins.None` in some cases according to the Discord API
-        documentation, but the situations that cause this to occur are not
-        currently documented.
+    This will be `builtins.None` for channel follow add messages. This may
+    point to a deleted message.
     """
 
     channel_id: snowflakes.Snowflake = attr.ib(repr=True)
-    """The ID of the channel that the message originated from."""
+    """The ID of the channel that the original message originated from."""
 
     guild_id: typing.Optional[snowflakes.Snowflake] = attr.ib(repr=True)
     """The ID of the guild that the message originated from.
 
-    !!! warning
-        This may be `builtins.None` in some cases according to the Discord API
-        documentation, but the situations that cause this to occur are not
-        currently documented.
+    This will be `builtins.None` when the original message is not from
+    a guild.
     """
+
+
+@attr_extensions.with_copy
+@attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
+class MessageApplication(guilds.PartialApplication):
+    """The representation of an application used in messages."""
+
+    cover_image_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
+    """The CDN's hash of this application's cover image, used on the store."""
+
+    primary_sku_id: typing.Optional[snowflakes.Snowflake] = attr.ib(eq=False, hash=False, repr=False)
+    """The ID of the primary "Game SKU" of a game that's sold on Discord."""
+
+    @property
+    def cover_image_url(self) -> typing.Optional[files.URL]:
+        """Cover image used on the store.
+
+        Returns
+        -------
+        typing.Optional[hikari.files.URL]
+            The URL, or `builtins.None` if no cover image exists.
+        """
+        return self.format_cover_image()
+
+    def format_cover_image(self, *, ext: str = "png", size: int = 4096) -> typing.Optional[files.URL]:
+        """Generate the cover image used in the store, if set.
+
+        Parameters
+        ----------
+        ext : builtins.str
+            The extension to use for this URL, defaults to `png`.
+            Supports `png`, `jpeg`, `jpg` and `webp`.
+        size : builtins.int
+            The size to set for the URL, defaults to `4096`.
+            Can be any power of two between 16 and 4096.
+
+        Returns
+        -------
+        typing.Optional[hikari.files.URL]
+            The URL, or `builtins.None` if no cover image exists.
+
+        Raises
+        ------
+        builtins.ValueError
+            If the size is not an integer power of 2 between 16 and 4096
+            (inclusive).
+        """
+        if self.cover_image_hash is None:
+            return None
+
+        return routes.CDN_APPLICATION_COVER.compile_to_file(
+            urls.CDN_URL,
+            application_id=self.id,
+            hash=self.cover_image_hash,
+            size=size,
+            file_format=ext,
+        )
 
 
 @attr_extensions.with_copy
@@ -253,7 +498,7 @@ class PartialMessage(snowflakes.Unique):
     `MessageUpdateEvent`, but for all other purposes should be treated as
     being optionally specified.
 
-    !!! warn
+    !!! warning
         All fields on this model except `channel` and `id` may be set to
         `hikari.undefined.UNDEFINED` (a singleton) if we have not
         received information about their state from Discord alongside field
@@ -269,10 +514,11 @@ class PartialMessage(snowflakes.Unique):
     channel_id: snowflakes.Snowflake = attr.ib(repr=True)
     """The ID of the channel that the message was sent in."""
 
-    guild_id: typing.Optional[snowflakes.Snowflake] = attr.ib(repr=True)
-    """The ID of the guild that the message was sent in."""
+    _guild_id: typing.Optional[snowflakes.Snowflake] = attr.ib(repr=True)
+    #: Try to determine this best-effort in the property defined further
+    #: down.
 
-    author: typing.Optional[users.User] = attr.ib(repr=True)
+    author: typing.Optional[users_.User] = attr.ib(repr=True)
     """The author of this message.
 
     This will be `builtins.None` in some cases such as when Discord
@@ -285,7 +531,8 @@ class PartialMessage(snowflakes.Unique):
     If the message is not in a guild, this will be `builtins.None`.
 
     This will also be `builtins.None` in some cases such as when Discord updates
-    a message with an embed URL preview.
+    a message with an embed URL preview or in messages fetched from the
+    REST API.
     """
 
     content: undefined.UndefinedNoneOr[str] = attr.ib(repr=False)
@@ -304,27 +551,24 @@ class PartialMessage(snowflakes.Unique):
     is_tts: undefined.UndefinedOr[bool] = attr.ib(repr=False)
     """Whether the message is a TTS message."""
 
-    is_mentioning_everyone: undefined.UndefinedOr[bool] = attr.ib(repr=False)
-    """Whether the message mentions `@everyone` or `@here`."""
+    mentions: Mentions = attr.ib(repr=True)
+    """Description of who is mentioned in a message.
 
-    # TODO: make a mentions object. These type hints are cancer in the documentation.
-    user_mentions: undefined.UndefinedOr[typing.Sequence[snowflakes.Snowflake]] = attr.ib(repr=False)
-    """The users the message mentions."""
+    !!! warning
+        If the contents have not mutated and this is a message update event,
+        some fields that are not affected may be empty instead.
 
-    role_mentions: undefined.UndefinedOr[typing.Sequence[snowflakes.Snowflake]] = attr.ib(repr=False)
-    """The roles the message mentions."""
-
-    channel_mentions: undefined.UndefinedOr[typing.Sequence[snowflakes.Snowflake]] = attr.ib(repr=False)
-    """The channels the message mentions."""
+        This is a Discord limitation.
+    """
 
     attachments: undefined.UndefinedOr[typing.Sequence[Attachment]] = attr.ib(repr=False)
     """The message attachments."""
 
     embeds: undefined.UndefinedOr[typing.Sequence[embeds_.Embed]] = attr.ib(repr=False)
-    """The message's embeds."""
+    """The message embeds."""
 
     reactions: undefined.UndefinedOr[typing.Sequence[Reaction]] = attr.ib(repr=False)
-    """The message's reactions."""
+    """The message reactions."""
 
     is_pinned: undefined.UndefinedOr[bool] = attr.ib(repr=False)
     """Whether the message is pinned."""
@@ -333,25 +577,57 @@ class PartialMessage(snowflakes.Unique):
     """If the message was generated by a webhook, the webhook's ID."""
 
     type: undefined.UndefinedOr[typing.Union[MessageType, int]] = attr.ib(repr=False)
-    """The message's type."""
+    """The message type."""
 
     activity: undefined.UndefinedNoneOr[MessageActivity] = attr.ib(repr=False)
-    """The message's activity."""
+    """The message activity."""
 
-    application: undefined.UndefinedNoneOr[applications.Application] = attr.ib(repr=False)
-    """The message's application."""
+    application: undefined.UndefinedNoneOr[MessageApplication] = attr.ib(repr=False)
+    """The message application."""
 
-    message_reference: undefined.UndefinedNoneOr[MessageCrosspost] = attr.ib(repr=False)
-    """The message's cross-posted reference data."""
+    message_reference: undefined.UndefinedNoneOr[MessageReference] = attr.ib(repr=False)
+    """The message reference data."""
 
     flags: undefined.UndefinedNoneOr[MessageFlag] = attr.ib(repr=False)
-    """The message's flags."""
+    """The message flags."""
+
+    stickers: undefined.UndefinedOr[typing.Sequence[Sticker]] = attr.ib(repr=False)
+    """The stickers sent with this message."""
 
     nonce: undefined.UndefinedNoneOr[str] = attr.ib(repr=False)
     """The message nonce.
 
     This is a string used for validating a message was sent.
     """
+
+    referenced_message: undefined.UndefinedNoneOr[Message] = attr.ib(repr=False)
+    """The message that was replied to.
+
+    If `type` is `MessageType.REPLY` and `hikari.undefined.UNDEFINED`, Discord's
+    backend didn't attempt to fetch the message, so the status is unknown. If
+    `type` is `MessageType.REPLY` and `builtins.None`, the message was deleted.
+    """
+
+    @property
+    def guild_id(self) -> typing.Optional[snowflakes.Snowflake]:
+        """ID of the guild that the message was sent in.
+
+        This will not be present on REST API responses if the application is
+        stateless or missing the `GUILDS` intent.
+        """
+        if self._guild_id:
+            return self._guild_id
+
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+        # Don't check the member, as if the guild_id is missing, the member
+        # will always be missing too.
+        channel = self.app.cache.get_guild_channel(self.channel_id)
+
+        if channel is None:
+            return None
+
+        return channel.guild_id
 
     @property
     def link(self) -> str:
@@ -391,11 +667,12 @@ class PartialMessage(snowflakes.Unique):
         *,
         embed: undefined.UndefinedNoneOr[embeds_.Embed] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        mentions_reply: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users_.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
         ] = undefined.UNDEFINED,
         flags: undefined.UndefinedOr[MessageFlag] = undefined.UNDEFINED,
     ) -> Message:
@@ -428,7 +705,12 @@ class PartialMessage(snowflakes.Unique):
             not changed. If `builtins.True`, then `@everyone`/`@here` mentions
             in the message content will show up as mentioning everyone that can
             view the chat.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        mentions_reply : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether to mention the author of the message
+            that is being replied to.
+
+            This will not do anything if this is not a reply message.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             Sanitation for user mentions. If
             `hikari.undefined.UNDEFINED`, then the previous setting is
             not changed. If `builtins.True`, all valid user mentions will behave
@@ -438,7 +720,7 @@ class PartialMessage(snowflakes.Unique):
             You may alternatively pass a collection of
             `hikari.snowflakes.Snowflake` user IDs, or
             `hikari.users.PartialUser`-derived objects.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             Sanitation for role mentions. If
             `hikari.undefined.UNDEFINED`, then the previous setting is
             not changed. If `builtins.True`, all valid role mentions will behave
@@ -505,29 +787,34 @@ class PartialMessage(snowflakes.Unique):
             content=content,
             embed=embed,
             mentions_everyone=mentions_everyone,
+            mentions_reply=mentions_reply,
             user_mentions=user_mentions,
             role_mentions=role_mentions,
             flags=flags,
         )
 
-    async def reply(
+    async def respond(
         self,
         content: undefined.UndefinedOr[typing.Any] = undefined.UNDEFINED,
         *,
         embed: undefined.UndefinedOr[embeds_.Embed] = undefined.UNDEFINED,
         attachment: undefined.UndefinedOr[files.Resourceish] = undefined.UNDEFINED,
         attachments: undefined.UndefinedOr[typing.Sequence[files.Resourceish]] = undefined.UNDEFINED,
-        tts: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         nonce: undefined.UndefinedOr[str] = undefined.UNDEFINED,
+        tts: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        reply: typing.Union[
+            undefined.UndefinedType, snowflakes.SnowflakeishOr[PartialMessage], bool
+        ] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        mentions_reply: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users_.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
         ] = undefined.UNDEFINED,
     ) -> Message:
-        """Create a message in the given channel.
+        """Create a message in the channel this message belongs to.
 
         Parameters
         ----------
@@ -560,17 +847,24 @@ class PartialMessage(snowflakes.Unique):
         nonce : hikari.undefined.UndefinedOr[builtins.str]
             If provided, a nonce that can be used for optimistic message
             sending.
+        reply : typing.Union[hikari.undefined.UndefinedType, hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage], builtins.bool]
+            If provided and `builtins.True`, reply to this message.
+            If provided and not `builtins.bool`, the message to reply to.
         mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
             If provided, whether the message should parse @everyone/@here
             mentions.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        mentions_reply : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether to mention the author of the message
+            that is being replied to.
+
+            This will not do anything if not being used with `reply`.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             If provided, and `builtins.True`, all mentions will be parsed.
             If provided, and `builtins.False`, no mentions will be parsed.
             Alternatively this may be a collection of
-            `hikari.snowflakes.Snowflake`, or
-            `hikari.users.PartialUser` derivatives to enforce mentioning
-            specific users.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+            `hikari.snowflakes.Snowflake`, or `hikari.users.PartialUser`
+            derivatives to enforce mentioning specific users.
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             If provided, and `builtins.True`, all mentions will be parsed.
             If provided, and `builtins.False`, no mentions will be parsed.
             Alternatively this may be a collection of
@@ -619,7 +913,8 @@ class PartialMessage(snowflakes.Unique):
             limits; too many attachments; attachments that are too large;
             invalid image URLs in embeds; users in `user_mentions` not being
             mentioned in the message content; roles in `role_mentions` not
-            being mentioned in the message content.
+            being mentioned in the message content; `reply` not found
+            or not in the same channel.
         hikari.errors.UnauthorizedError
             If you are unauthorized to make the request (invalid/missing token).
         hikari.errors.ForbiddenError
@@ -638,6 +933,9 @@ class PartialMessage(snowflakes.Unique):
             You are expected to make a connection to the gateway and identify
             once before being able to use this endpoint for a bot.
         """  # noqa: E501 - Line too long
+        if reply is True:
+            reply = self
+
         return await self.app.rest.create_message(
             channel=self.channel_id,
             content=content,
@@ -646,9 +944,11 @@ class PartialMessage(snowflakes.Unique):
             attachments=attachments,
             nonce=nonce,
             tts=tts,
+            reply=reply,
             mentions_everyone=mentions_everyone,
             user_mentions=user_mentions,
             role_mentions=role_mentions,
+            mentions_reply=mentions_reply,
         )
 
     async def delete(self) -> None:
@@ -719,7 +1019,7 @@ class PartialMessage(snowflakes.Unique):
         self,
         emoji: emojis_.Emojiish,
         *,
-        user: undefined.UndefinedOr[snowflakes.SnowflakeishOr[users.PartialUser]] = undefined.UNDEFINED,
+        user: undefined.UndefinedOr[snowflakes.SnowflakeishOr[users_.PartialUser]] = undefined.UNDEFINED,
     ) -> None:
         r"""Remove a reaction from this message.
 
@@ -826,10 +1126,7 @@ class Message(PartialMessage):
     # and possibly result in large amounts of unwasted memory if you get that
     # far.
 
-    guild_id: typing.Optional[snowflakes.Snowflake]
-    """The ID of the guild that the message was sent in."""
-
-    author: users.User
+    author: users_.User
     """The author of this message."""
 
     member: typing.Optional[guilds.Member]
@@ -850,17 +1147,8 @@ class Message(PartialMessage):
     is_tts: bool
     """Whether the message is a TTS message."""
 
-    is_mentioning_everyone: bool
-    """Whether the message mentions `@everyone` or `@here`."""
-
-    user_mentions: typing.Sequence[snowflakes.Snowflake]
-    """The users the message mentions."""
-
-    role_mentions: typing.Sequence[snowflakes.Snowflake]
-    """The roles the message mentions."""
-
-    channel_mentions: typing.Sequence[snowflakes.Snowflake]
-    """The channels the message mentions."""
+    mentions: Mentions
+    """Who is mentioned in a message."""
 
     attachments: typing.Sequence[Attachment]
     """The message attachments."""
@@ -883,14 +1171,17 @@ class Message(PartialMessage):
     activity: typing.Optional[MessageActivity]
     """The message activity."""
 
-    application: typing.Optional[applications.Application]
+    application: typing.Optional[MessageApplication]
     """The message application."""
 
-    message_reference: typing.Optional[MessageCrosspost]
-    """The message crossposted reference data."""
+    message_reference: typing.Optional[MessageReference]
+    """The message reference data."""
 
     flags: typing.Optional[MessageFlag]
     """The message flags."""
+
+    stickers: typing.Sequence[Sticker]
+    """The stickers sent with this message."""
 
     nonce: typing.Optional[str]
     """The message nonce. This is a string used for validating a message was sent."""

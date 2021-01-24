@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -90,12 +91,6 @@ def test_parse_iso_8601_date_with_no_fraction():
     assert date.minute == 22
     assert date.second == 33
     assert date.microsecond == 0
-
-
-def test_parse_http_date():
-    rfc_timestamp = "Mon, 03 Jun 2019 17:54:26 GMT"
-    expected_timestamp = datetime.datetime(2019, 6, 3, 17, 54, 26, tzinfo=datetime.timezone.utc)
-    assert time.rfc7231_datetime_string_to_datetime(rfc_timestamp) == expected_timestamp
 
 
 def test_parse_discord_epoch_to_datetime():

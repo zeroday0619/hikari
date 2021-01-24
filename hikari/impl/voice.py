@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,22 +30,20 @@ import asyncio
 import logging
 import typing
 
-from hikari import channels
 from hikari import errors
-from hikari import guilds
 from hikari import snowflakes
-from hikari.api import event_dispatcher
 from hikari.api import voice
 from hikari.events import voice_events
-from hikari.impl import bot
 from hikari.internal import ux
 
 if typing.TYPE_CHECKING:
-    _VoiceEventCallbackT = typing.Callable[[voice_events.VoiceEvent], typing.Coroutine[None, typing.Any, None]]
+    from hikari import channels
+    from hikari import guilds
+    from hikari import traits
+
+    _VoiceConnectionT = typing.TypeVar("_VoiceConnectionT", bound="voice.VoiceConnection")
 
 _LOGGER: typing.Final[logging.Logger] = logging.getLogger("hikari.voice.management")
-
-_VoiceConnectionT = typing.TypeVar("_VoiceConnectionT", bound="voice.VoiceConnection")
 
 
 class VoiceComponentImpl(voice.VoiceComponent):
@@ -54,17 +53,13 @@ class VoiceComponentImpl(voice.VoiceComponent):
     voice channels with.
     """
 
-    __slots__: typing.Sequence[str] = ("_app", "_connections", "_dispatcher")
+    __slots__: typing.Sequence[str] = ("_app", "_connections", "_events")
 
-    def __init__(self, app: bot.BotApp, dispatcher: event_dispatcher.EventDispatcher) -> None:
+    def __init__(self, app: traits.BotAware) -> None:
         self._app = app
-        self._dispatcher = dispatcher
+        self._events = app.event_manager
         self._connections: typing.Dict[snowflakes.Snowflake, voice.VoiceConnection] = {}
-        self._dispatcher.subscribe(voice_events.VoiceEvent, self._on_voice_event)
-
-    @property
-    def app(self) -> bot.BotApp:
-        return self._app
+        self._events.subscribe(voice_events.VoiceEvent, self._on_voice_event)
 
     @property
     def connections(self) -> typing.Mapping[snowflakes.Snowflake, voice.VoiceConnection]:
@@ -77,16 +72,16 @@ class VoiceComponentImpl(voice.VoiceComponent):
 
     async def close(self) -> None:
         await self.disconnect()
-        self._dispatcher.unsubscribe(voice_events.VoiceEvent, self._on_voice_event)
+        self._events.unsubscribe(voice_events.VoiceEvent, self._on_voice_event)
 
     async def connect_to(
         self,
-        channel: snowflakes.SnowflakeishOr[channels.GuildVoiceChannel],
         guild: snowflakes.SnowflakeishOr[guilds.PartialGuild],
+        channel: snowflakes.SnowflakeishOr[channels.GuildVoiceChannel],
+        voice_connection_type: typing.Type[_VoiceConnectionT],
         *,
         deaf: bool = False,
         mute: bool = False,
-        voice_connection_type: typing.Type[_VoiceConnectionT],
         **kwargs: typing.Any,
     ) -> _VoiceConnectionT:
         guild_id = snowflakes.Snowflake(guild)
@@ -137,13 +132,13 @@ class VoiceComponentImpl(voice.VoiceComponent):
         state_event, server_event = await asyncio.wait_for(
             asyncio.gather(
                 # Voice state update:
-                self._dispatcher.wait_for(
+                self._events.wait_for(
                     voice_events.VoiceStateUpdateEvent,
                     timeout=None,
                     predicate=self._init_state_update_predicate(guild_id, user.id),
                 ),
                 # Server update:
-                self._dispatcher.wait_for(
+                self._events.wait_for(
                     voice_events.VoiceServerUpdateEvent,
                     timeout=None,
                     predicate=self._init_server_update_predicate(guild_id),

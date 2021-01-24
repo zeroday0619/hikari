@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +36,7 @@ import attr
 
 from hikari import channels
 from hikari import intents
+from hikari import traits
 from hikari import users
 from hikari.api import special_endpoints
 from hikari.events import base_events
@@ -46,7 +48,6 @@ if typing.TYPE_CHECKING:
 
     from hikari import guilds
     from hikari import snowflakes
-    from hikari import traits
     from hikari.api import shard as gateway_shard
 
 
@@ -170,16 +171,19 @@ class GuildTypingEvent(TypingEvent):
     """
 
     @property
-    def channel(self) -> typing.Union[channels.GuildTextChannel, channels.GuildNewsChannel]:
+    def channel(self) -> typing.Union[channels.GuildTextChannel, channels.GuildNewsChannel, None]:
         """Get the cached channel object this typing event occurred in.
 
         Returns
         -------
-        typing.Union[hikari.channels.GuildTextChannel, hikari.channels.GuildNewsChannel]
+        typing.Union[hikari.channels.GuildTextChannel, hikari.channels.GuildNewsChannel, builtins.None]
             The channel.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         channel = self.app.cache.get_guild_channel(self.channel_id)
-        assert isinstance(
+        assert channel is None or isinstance(
             channel, (channels.GuildTextChannel, channels.GuildNewsChannel)
         ), f"expected GuildTextChannel or GuildNewsChannel from cache, got {channel}"
         return channel
@@ -195,6 +199,9 @@ class GuildTypingEvent(TypingEvent):
         typing.Optional[hikari.guilds.GatewayGuild]
             The object of the gateway guild if found else `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_available_guild(self.guild_id) or self.app.cache.get_unavailable_guild(self.guild_id)
 
     @property
@@ -271,6 +278,9 @@ class DMTypingEvent(TypingEvent):
     @property
     def user(self) -> typing.Optional[users.User]:
         # <<inherited docstring from TypingEvent>>.
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_user(self.user_id)
 
     async def fetch_channel(self) -> channels.DMChannel:

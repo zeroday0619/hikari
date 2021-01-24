@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -97,6 +98,9 @@ class MemberEvent(shard_events.ShardEvent, abc.ABC):
             The guild that this event occurred in, if known, else
             `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_available_guild(self.guild_id) or self.app.cache.get_unavailable_guild(self.guild_id)
 
 
@@ -146,6 +150,12 @@ class MemberUpdateEvent(MemberEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring from ShardEvent>>.
+
+    old_member: typing.Optional[guilds.Member] = attr.ib()
+    """The old member object.
+
+    This will be `builtins.None` if the member missing from the cache.
+    """
 
     member: guilds.Member = attr.ib()
     """Member object for the member that was updated.

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +28,7 @@ __all__: typing.List[str] = [
     "HikariError",
     "HikariWarning",
     "HikariInterrupt",
+    "ComponentNotRunningError",
     "NotFoundError",
     "RateLimitedError",
     "RateLimitTooLongError",
@@ -101,6 +103,17 @@ class HikariInterrupt(KeyboardInterrupt, HikariError):
 
 
 @attr.s(auto_exc=True, slots=True, repr=False, weakref_slot=False)
+class ComponentNotRunningError(HikariError):
+    """An exception thrown if trying to interact with a component that is not running."""
+
+    reason: str = attr.ib()
+    """A string to explain the issue."""
+
+    def __str__(self) -> str:
+        return self.reason
+
+
+@attr.s(auto_exc=True, slots=True, repr=False, weakref_slot=False)
 class GatewayError(HikariError):
     """A base exception type for anything that can be thrown by the Gateway."""
 
@@ -149,6 +162,9 @@ class ShardCloseCode(int, enums.Enum):
 @attr.s(auto_exc=True, slots=True, repr=False, weakref_slot=False)
 class GatewayConnectionError(GatewayError):
     """An exception thrown if a connection issue occurs."""
+
+    def __str__(self) -> str:
+        return f"Failed to connect to server: {self.reason!r}"
 
 
 @attr.s(auto_exc=True, slots=True, repr=False, weakref_slot=False)
@@ -548,10 +564,10 @@ class BulkDeleteError(HikariError):
     and will have a cause containing the initial exception.
     """
 
-    messages_deleted: typing.Sequence[snowflakes.SnowflakeishOr[messages.PartialMessage]] = attr.ib()
+    messages_deleted: snowflakes.SnowflakeishSequence[messages.PartialMessage] = attr.ib()
     """Any message objects that were deleted before an exception occurred."""
 
-    messages_skipped: typing.Sequence[snowflakes.SnowflakeishOr[messages.PartialMessage]] = attr.ib()
+    messages_skipped: snowflakes.SnowflakeishSequence[messages.PartialMessage] = attr.ib()
     """Any message objects that were skipped due to an exception."""
 
     @property
@@ -566,6 +582,11 @@ class BulkDeleteError(HikariError):
         deleted = len(self.messages_deleted)
         total = deleted + len(self.messages_skipped)
         return 100 * deleted / total
+
+    def __str__(self) -> str:
+        deleted = len(self.messages_deleted)
+        total = deleted + len(self.messages_skipped)
+        return f"Error encountered when bulk deleting messages ({deleted}/{total} messages deleted)"
 
 
 @attr.s(auto_exc=True, slots=True, repr=False, init=False, weakref_slot=False)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +29,7 @@ from typing import TypeVar as __TypeVar
 from typing import Union as __Union
 
 class UndefinedType(__enum.Enum):
+    def __bool__(self) -> __Literal[False]: ...
     UNDEFINED = __enum.auto()
 
 UNDEFINED: __Literal[UndefinedType.UNDEFINED] = UndefinedType.UNDEFINED
@@ -37,5 +39,4 @@ __T = __TypeVar("__T", covariant=True)
 UndefinedOr = __Union[__T, UndefinedType]
 UndefinedNoneOr = __Union[UndefinedOr[__T], None]
 
-def count(*items: __Any) -> int:
-    ...
+def count(*items: __Any) -> int: ...

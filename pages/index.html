@@ -2,28 +2,7 @@
 <html lang="en">
 
 <head>
-    <!--
-     | Copyright (c) Nekokatt 2020
-     |
-     | Permission is hereby granted, free of charge, to any person obtaining a copy
-     | of this software and associated documentation files (the "Software"), to deal
-     | in the Software without restriction, including without limitation the rights
-     | to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-     | copies of the Software, and to permit persons to whom the Software is
-     | furnished to do so, subject to the following conditions:
-     |
-     | The above copyright notice and this permission notice shall be included in all
-     | copies or substantial portions of the Software.
-     |
-     | THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-     | IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-     | FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-     | AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-     | LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-     | OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-     | SOFTWARE.
-     !-->
-    <link rel="shortcut icon" type="image/png" href="https://hikari-py.github.io/hikari/logo.png" />
+    <link rel="shortcut icon" type="image/png" href="logo.png" />
     <meta property="og:title" content="Hikari.py" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://hikari-py.github.io/hikari/logo.png" />
@@ -43,9 +22,9 @@
     <div class="pre mono background-only-base">
         <pre class="background-only">
             <span class="red">  oooo         o8o  oooo                            o8o   </span>  <span class="bwh">  &copy; 2020 Nekokatt, licensed under MIT   </span>
-            <span class="ora">  `888         `"'  `888                            `"'   </span>  <span class="whi">  Installed at:  </span><span class="lin">/home/hikari-py/code/hikari/hikari</span>
+            <span class="ora">  `888         `"'  `888                            `"'   </span>  <span class="whi">  Installed at:  </span><span class="lin">/home/hikari-py/code/hikari</span>
             <span class="yel">   888 .oo.   oooo   888  oooo   .oooo.   oooo d8b oooo   </span>  <span class="whi">  Support:       </span><span class="lin">https://discord.gg/Jx4cNGG</span>
-            <span class="gre">   888P"Y88b  `888   888 .8P'   `P  )88b  `888""8P `888   </span>  <span class="whi">  Documentation: </span><span class="lin">https://hikari-py.github.io/hikari/hikari</span>
+            <span class="gre">   888P"Y88b  `888   888 .8P'   `P  )88b  `888""8P `888   </span>  <span class="whi">  Documentation: </span><span class="lin">https://hikari-py.github.io/hikari/documentation</span>
             <span class="cya">   888   888   888   888888.     .oP"888   888      888   </span>
             <span class="blu">   888   888   888   888 `88b.  d8(  888   888      888   </span>  <span class="bwh">  CPython 3.8.5  </span>
             <span class="pur">  o888o o888o o888o o888o o888o `Y888""8o d888b    o888o  </span>  <span class="whi">  compiled with GCC 10.1.0 (default May 17 2020 18:15:42)  </span>
@@ -75,7 +54,7 @@
                 def decorator(fn):
                     @functools.wraps(fn)
                     async def wrapper(event):
-                        if not event.message.author.is_bot and event.message.content.startswith(name):
+                        if event.is_human and event.message.content.startswith(name):
                             await fn(event)
 
                     return wrapper
@@ -86,7 +65,7 @@
             @bot.listen()
             @command("hk.ping")
             async def ping(event: hikari.MessageCreateEvent) -> None:
-                await event.message.reply("Pong!")
+                await event.message.respond("Pong!")
 
 
             @bot.listen()
@@ -100,13 +79,13 @@
                     )
 
                 try:
-                    await event.message.reply("Please enter the first number")
+                    await event.message.respond("Please enter the first number")
                     e1 = await bot.wait_for(hikari.MessageCreateEvent, predicate=is_number_check, timeout=30)
-                    await event.message.reply("Please enter the second number")
+                    await event.message.respond("Please enter the second number")
                     e2 = await bot.wait_for(hikari.MessageCreateEvent, predicate=is_number_check, timeout=30)
 
                 except asyncio.TimeoutError:
-                    await event.message.reply("You took too long...")
+                    await event.message.respond("You took too long...")
 
                 else:
                     val1 = int(e1.message.content)
@@ -114,7 +93,7 @@
 
                     embed = hikari.Embed(title="Result!", description=f"{val1} + {val2} = {val1 + val2}", color="#3f3")
 
-                    await event.message.reply(embed=embed)
+                    await event.message.respond(embed=embed)
 
 
             bot.run()
@@ -135,10 +114,7 @@
         </header>
 
         <main role="main" class="inner cover">
-            <h1 class="display-1">
-                <small>pip install --pre</small><br />
-                hikari
-            </h1>
+            <h1 class="display-1"><small>pip install</small><br />hikari</h1>
             <p class="lead">A new, powerful, static-typed Python API for writing Discord bots.</p>
             <p>
                 This API is still in a alpha state, and is a <strong>work in progress</strong>! Features may change
@@ -157,7 +133,7 @@
 
         <footer class="mastfoot mt-auto">
             <div class="inner">
-                &copy; 2020, Nekokatt, MIT
+                &copy; 2020, Nekokatt, MIT<br>&copy; 2021, davfsa, MIT
             </div>
         </footer>
     </div>
@@ -171,7 +147,7 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
         integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
         crossorigin="anonymous"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/10.0.1/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.0.1/highlight.min.js"></script>
     <script>
         hljs.initHighlightingOnLoad();
         $(document).ready(function () {

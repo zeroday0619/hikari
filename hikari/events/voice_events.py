@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -79,6 +80,12 @@ class VoiceStateUpdateEvent(VoiceEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring>>.
+
+    old_state: typing.Optional[voices.VoiceState] = attr.ib(repr=True)
+    """The old voice state.
+
+    This will be `builtins.None` if the voice state missing from the cache.
+    """
 
     state: voices.VoiceState = attr.ib(repr=True)
     """Voice state that this update contained.

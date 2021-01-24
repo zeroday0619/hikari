@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -453,7 +454,7 @@ class AuditLogEntry(snowflakes.Unique):
 
         Returns
         -------
-        typing.Optional[hikari.users.user]
+        typing.Optional[hikari.users.User]
             The user who made this change, if available.
 
         Raises

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -45,6 +46,7 @@ if typing.TYPE_CHECKING:
     from hikari import presences as presence_models
     from hikari import sessions as gateway_models
     from hikari import snowflakes
+    from hikari import templates as template_models
     from hikari import users as user_models
     from hikari import voices as voice_models
     from hikari import webhooks as webhook_models
@@ -634,6 +636,36 @@ class EntityFactory(abc.ABC):
         """
 
     @abc.abstractmethod
+    def deserialize_welcome_screen(self, payload: data_binding.JSONObject) -> guild_models.WelcomeScreen:
+        """Parse a raw payload from Discord into a guild welcome screen object.
+
+        Parameters
+        ----------
+        payload : hikari.internal.data_binding.JSONObject
+            The JSON payload to deserialize.
+
+        Returns
+        -------
+        hikari.guilds.WelcomeScreen
+            The deserialized guild welcome screen object.
+        """
+
+    @abc.abstractmethod
+    def serialize_welcome_channel(self, welcome_channel: guild_models.WelcomeChannel) -> data_binding.JSONObject:
+        """Serialize a welcome channel object to a json serializable dict.
+
+        Parameters
+        ----------
+        welcome_channel : hikari.guilds.WelcomeChannel
+            The guild welcome channel object to serialize.
+
+        Returns
+        -------
+        hikari.internal.data_binding.JSONObject
+            The serialized representation of the welcome channel.
+        """
+
+    @abc.abstractmethod
     def deserialize_member(
         self,
         payload: data_binding.JSONObject,
@@ -714,7 +746,12 @@ class EntityFactory(abc.ABC):
         """
 
     @abc.abstractmethod
-    def deserialize_integration(self, payload: data_binding.JSONObject) -> guild_models.Integration:
+    def deserialize_integration(
+        self,
+        payload: data_binding.JSONObject,
+        *,
+        guild_id: undefined.UndefinedOr[snowflakes.Snowflake] = undefined.UNDEFINED,
+    ) -> guild_models.Integration:
         """Parse a raw payload from Discord into an integration object.
 
         Parameters
@@ -722,10 +759,23 @@ class EntityFactory(abc.ABC):
         payload : hikari.internal.data_binding.JSONObject
             The JSON payload to deserialize.
 
+        Other Parameters
+        ----------------
+        guild_id : hikari.undefined.UndefinedOr[hikari.snowflakes.Snowflake]
+            The ID of the guild this integration belongs to. If this is specified
+            then this will be prioritised over `"guild_id"` in the payload.
+
         Returns
         -------
         hikari.guilds.Integration
             The deserialized integration object.
+
+        Raises
+        ------
+        KeyError
+            If `guild_id` is left as `hikari.undefined.UNDEFINED` when
+            `"guild_id"` is not present in the passed payload for the payload of
+            the integration.
         """
 
     @abc.abstractmethod
@@ -921,6 +971,25 @@ class EntityFactory(abc.ABC):
             guild ID was passed for the `guild_id` parameter.
 
             If this is raised, no guild ID info was provided anywhere.
+        """
+
+    ###################
+    # TEMPLATE MODELS #
+    ###################
+
+    @abc.abstractmethod
+    def deserialize_template(self, payload: data_binding.JSONObject) -> template_models.Template:
+        """Parse a raw payload from Discord into a template object.
+
+        Parameters
+        ----------
+        payload : hikari.internal.data_binding.JSONObject
+            The JSON payload to deserialize.
+
+        Returns
+        -------
+        hikari.templates.Template
+            The deserialized template object.
         """
 
     ###############

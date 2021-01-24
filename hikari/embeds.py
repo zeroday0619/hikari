@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -68,10 +69,24 @@ class EmbedResource(files.Resource[AsyncReaderT]):
     @property
     @typing.final
     def url(self) -> str:
+        """URL of this embed resource.
+
+        Returns
+        -------
+        typing.Optional[builtins.str]
+            The URL of this embed resource.
+        """
         return self.resource.url
 
     @property
     def filename(self) -> str:
+        """File name of this embed resource.
+
+        Returns
+        -------
+        typing.Optional[builtins.str]
+            The file name of this embed resource.
+        """
         return self.resource.filename
 
     def stream(
@@ -108,6 +123,32 @@ class EmbedResourceWithProxy(EmbedResource[AsyncReaderT]):
         and will be ignored during serialization. Expect this to be
         populated on any received embed attached to a message event.
     """
+
+    @property
+    @typing.final
+    def proxy_url(self) -> typing.Optional[str]:
+        """Proxied URL of this embed resource if applicable.
+
+        Returns
+        -------
+        typing.Optional[builtins.str]
+            The proxied URL of this embed resource if applicable, else
+            `builtins.None`.
+        """
+        return self.proxy_resource.url if self.proxy_resource else None
+
+    @property
+    @typing.final
+    def proxy_filename(self) -> typing.Optional[str]:
+        """File name of the proxied version of this embed resource if applicable.
+
+        Returns
+        -------
+        typing.Optional[builtins.str]
+            The file name of the proxied version of this embed resource if
+            applicable, else `builtins.None`.
+        """
+        return self.proxy_resource.filename if self.proxy_resource else None
 
 
 @attr_extensions.with_copy
@@ -148,7 +189,7 @@ class EmbedImage(EmbedResourceWithProxy[AsyncReaderT]):
 
 
 @attr.s(eq=True, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
-class EmbedVideo(EmbedResource[AsyncReaderT]):
+class EmbedVideo(EmbedResourceWithProxy[AsyncReaderT]):
     """Represents an embed video.
 
     !!! note
@@ -526,11 +567,7 @@ class Embed:
             The offending line of code causing this warning was:"""
         )
 
-        warnings.warn(
-            message,
-            category=errors.HikariWarning,
-            stacklevel=3,
-        )
+        warnings.warn(message, category=errors.HikariWarning, stacklevel=3)
 
     @property
     def footer(self) -> typing.Optional[EmbedFooter]:

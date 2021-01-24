@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -74,7 +75,6 @@ FILE_EXTS = (
     ".ps1",
     ".rb",
     ".pl",
-    ".travis.yml",
 )
 
 LINE_ENDING_PATHS = {
@@ -124,7 +124,7 @@ def remove_trailing_whitespaces() -> None:
 
     end = time.perf_counter()
 
-    remark = "Good job!" if not count else "Will now continue to run black."
+    remark = "Good job!" if not count else ""
     print(
         "\033[36mnox > I had to fix",
         count,

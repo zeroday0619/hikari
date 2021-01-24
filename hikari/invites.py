@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -100,6 +101,9 @@ class VanityURL(InviteCode):
 class InviteGuild(guilds.PartialGuild):
     """Represents the partial data of a guild that is attached to invites."""
 
+    features: typing.Sequence[guilds.GuildFeatureish] = attr.ib(eq=False, hash=False, repr=False)
+    """A list of the features in this guild."""
+
     splash_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
     """The hash of the splash for the guild, if there is one."""
 
@@ -126,6 +130,9 @@ class InviteGuild(guilds.PartialGuild):
     This is only present if `hikari.guilds.GuildFeature.VANITY_URL` is in the
     `features` for this guild. If not, this will always be `builtins.None`.
     """
+
+    welcome_screen: typing.Optional[guilds.WelcomeScreen] = attr.ib(eq=False, hash=False, repr=False)
+    """The welcome screen of a community guild shown to new members, if set."""
 
     @property
     def splash_url(self) -> typing.Optional[files.URL]:

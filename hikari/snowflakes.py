@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +32,7 @@ __all__: typing.List[str] = [
     "SearchableSnowflakeish",
     "SnowflakeishOr",
     "SearchableSnowflakeishOr",
+    "SnowflakeishSequence",
 ]
 
 import abc
@@ -230,3 +232,6 @@ The valid types for this type hint are:
 - `Snowflake`
 - `datetime.datetime`
 """
+
+SnowflakeishSequence = typing.Sequence[SnowflakeishOr[T]]
+"""Type hint representing a collection of unique object entities."""

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +36,7 @@ async def on_message(event: hikari.MessageCreateEvent) -> None:
         return
 
     if event.content == "!ping":
-        await event.message.reply(f"Pong! {bot.heartbeat_latency * 1_000:.0f}ms")
+        await event.message.respond(f"Pong! {bot.heartbeat_latency * 1_000:.0f}ms")
 
 
 bot.run()

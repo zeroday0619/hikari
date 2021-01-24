@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -49,6 +50,7 @@ import attr
 from hikari import files
 from hikari import permissions
 from hikari import snowflakes
+from hikari import traits
 from hikari import undefined
 from hikari import urls
 from hikari import users
@@ -63,7 +65,6 @@ if typing.TYPE_CHECKING:
     from hikari import guilds
     from hikari import iterators
     from hikari import messages
-    from hikari import traits
     from hikari import webhooks
     from hikari.api import special_endpoints
 
@@ -178,7 +179,7 @@ class ChannelFollow:
         return await self.app.rest.fetch_webhook(self.webhook_id)
 
     @property
-    def channel(self) -> typing.Union[GuildNewsChannel, GuildTextChannel]:
+    def channel(self) -> typing.Union[GuildNewsChannel, GuildTextChannel, None]:
         """Get the channel being followed from the cache.
 
         !!! warning
@@ -187,14 +188,17 @@ class ChannelFollow:
 
         Returns
         -------
-        typing.Optional[hikari.channels.GuildNewsChannel, hikari.channels.GuildTextChannel]
+        typing.Union[hikari.channels.GuildNewsChannel, hikari.channels.GuildTextChannel, builtins.None]
             The object of the guild channel that was found in the cache or
             `builtins.None`. While this will usually be `GuildNewsChannel` or
             `builtins.None`, if the channel referenced has since lost it's news
             status then this will return a `GuildTextChannel`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         channel = self.app.cache.get_guild_channel(self.channel_id)
-        assert isinstance(channel, (GuildNewsChannel, GuildTextChannel))
+        assert channel is None or isinstance(channel, (GuildNewsChannel, GuildTextChannel))
         return channel
 
 
@@ -364,15 +368,17 @@ class TextChannel(PartialChannel, abc.ABC):
         attachments: undefined.UndefinedOr[typing.Sequence[files.Resourceish]] = undefined.UNDEFINED,
         nonce: undefined.UndefinedOr[str] = undefined.UNDEFINED,
         tts: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        reply: undefined.UndefinedOr[snowflakes.SnowflakeishOr[messages.PartialMessage]] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        mentions_reply: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds.PartialRole], bool]
         ] = undefined.UNDEFINED,
     ) -> messages.Message:
-        """Create a message in the channel this message belongs to.
+        """Create a message in this channel.
 
         Parameters
         ----------
@@ -405,17 +411,24 @@ class TextChannel(PartialChannel, abc.ABC):
         nonce : hikari.undefined.UndefinedOr[builtins.str]
             If provided, a nonce that can be used for optimistic message
             sending.
+        reply : hikari.undefined.UndefinedOr[hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage]]
+            If provided, the message to reply to.
         mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
             If provided, whether the message should parse @everyone/@here
             mentions.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        mentions_reply : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether to mention the author of the message
+            that is being replied to.
+
+            This will not do anything if not being used with `reply`.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             If provided, and `builtins.True`, all mentions will be parsed.
             If provided, and `builtins.False`, no mentions will be parsed.
             Alternatively this may be a collection of
             `hikari.snowflakes.Snowflake`, or
             `hikari.users.PartialUser` derivatives to enforce mentioning
             specific users.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             If provided, and `builtins.True`, all mentions will be parsed.
             If provided, and `builtins.False`, no mentions will be parsed.
             Alternatively this may be a collection of
@@ -464,7 +477,8 @@ class TextChannel(PartialChannel, abc.ABC):
             limits; too many attachments; attachments that are too large;
             invalid image URLs in embeds; users in `user_mentions` not being
             mentioned in the message content; roles in `role_mentions` not
-            being mentioned in the message content.
+            being mentioned in the message content; `reply` not found
+            or not in the same channel.
         hikari.errors.UnauthorizedError
             If you are unauthorized to make the request (invalid/missing token).
         hikari.errors.ForbiddenError
@@ -491,9 +505,11 @@ class TextChannel(PartialChannel, abc.ABC):
             attachments=attachments,
             nonce=nonce,
             tts=tts,
+            reply=reply,
             mentions_everyone=mentions_everyone,
             user_mentions=user_mentions,
             role_mentions=role_mentions,
+            mentions_reply=mentions_reply,
         )
 
     def trigger_typing(self) -> special_endpoints.TypingIndicator:

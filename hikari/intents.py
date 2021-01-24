@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -136,7 +137,9 @@ class Intents(enums.Flag):
     - `GUILD_BAN_ADD`
     - `GUILD_BAN_REMOVE`
     - `GUILD_EMOJIS_UPDATE`
-    - `GUILD_INTEGRATIONS_UPDATE`
+    - `INTEGRATION_CREATE`
+    - `INTEGRATION_DELETE`
+    - `INTEGRATION_UPDATE`
     - `INVITE_CREATE`
     - `INVITE_DELETE`
     - `CHANNEL_CREATE`
@@ -211,7 +214,9 @@ class Intents(enums.Flag):
     GUILD_INTEGRATIONS = 1 << 4
     """Subscribes to the following events:
 
-    * `GUILD_INTEGRATIONS_UPDATE`
+    * `INTEGRATION_CREATE`
+    * `INTEGRATION_DELETE`
+    * `INTEGRATION_UPDATE`
     """
 
     GUILD_WEBHOOKS = 1 << 5

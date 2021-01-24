@@ -59,7 +59,6 @@ def make_user(user_id, username):
 def make_team_member(user_id, username):
     user = make_user(user_id, username)
     return applications.TeamMember(
-        app=user.app,
         membership_state=applications.TeamMembershipState.ACCEPTED,
         permissions="*",
         team_id=snowflakes.Snowflake(1234),
@@ -78,6 +77,7 @@ def make_guild_member(user_id, username):
         premium_since=None,
         is_deaf=False,
         is_mute=False,
+        is_pending=False,
     )
 
 

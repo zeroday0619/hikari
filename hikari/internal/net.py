@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,11 +40,8 @@ async def generate_error_response(response: aiohttp.ClientResponse) -> errors.HT
     real_url = str(response.real_url)
     raw_body = await response.read()
 
-    args = [
-        real_url,
-        response.headers,
-        raw_body,
-    ]
+    # Little hack to stop mypy from complaining when using `*args`
+    args: typing.List[typing.Any] = [real_url, response.headers, raw_body]
     try:
         json_body = await response.json()
         args.append(json_body.get("message", ""))
@@ -140,8 +138,9 @@ def create_client_session(
         `builtins.True` to trust anything in environment variables
         and the `netrc` file, `builtins.False` to ignore it.
     ws_response_cls : typing.Type[aiohttp.ClientWebSocketResponse]
-        `builtins.True` to default to throwing exceptions if a request
-        fails, or `builtins.False` to default to not.
+        The websocket response class to use.
+
+        Defaults to `aiohttp.ClientWebSocketResponse`.
 
     Returns
     -------

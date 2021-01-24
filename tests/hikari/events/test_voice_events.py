@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,11 +30,17 @@ from hikari.events import voice_events
 class TestVoiceStateUpdateEvent:
     @pytest.fixture()
     def event(self):
-        return voice_events.VoiceStateUpdateEvent(app=None, shard=object(), state=mock.Mock(voices.VoiceState))
+        return voice_events.VoiceStateUpdateEvent(
+            app=None, shard=object(), state=mock.Mock(voices.VoiceState), old_state=mock.Mock(voices.VoiceState)
+        )
 
     def test_guild_id_property(self, event):
         event.state.guild_id = 123
         assert event.guild_id == 123
+
+    def test_old_voice_state(self, event):
+        event.old_state.guild_id = 123
+        assert event.old_state.guild_id == 123
 
 
 class TestVoiceServerUpdateEvent:

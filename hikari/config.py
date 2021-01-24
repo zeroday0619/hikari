@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +29,7 @@ __all__: typing.List[str] = [
     "ProxySettings",
     "HTTPTimeoutSettings",
     "HTTPSettings",
+    "CacheSettings",
 ]
 
 import base64
@@ -387,4 +389,80 @@ class HTTPSettings:
     -------
     HTTPTimeoutSettings
         The HTTP timeout settings to use for connection timeouts.
+    """
+
+
+@attr_extensions.with_copy
+@attr.s(slots=True, kw_only=True, weakref_slot=False)
+class CacheSettings:
+    """Settings to control the cache."""
+
+    enable: bool = attr.ib(default=True)
+    """Whether to enable the cache.
+
+    If set to `False`, all the cache functionality will be disabled.
+
+    Defaults to `builtins.True`.
+    """
+
+    guilds: bool = attr.ib(default=True)
+    """Whether to enable the guilds cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    members: bool = attr.ib(default=True)
+    """Whether to enable the members cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    guild_channels: bool = attr.ib(default=True)
+    """Whether to enable the guild channels cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    roles: bool = attr.ib(default=True)
+    """Whether to enable the roles cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    invites: bool = attr.ib(default=True)
+    """Whether to enable the invites cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    emojis: bool = attr.ib(default=True)
+    """Whether to enable the emojis cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    presences: bool = attr.ib(default=True)
+    """Whether to enable the presences cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    voice_states: bool = attr.ib(default=True)
+    """Whether to enable the voice states cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    messages: bool = attr.ib(default=True)
+    """Whether to enable the message cache.
+
+    Defaults to `builtins.True`.
+    """
+
+    max_messages: int = attr.ib(default=300)
+    """The max number of messages to store in the cache at once.
+
+    This will have no effect if `messages` is `builtins.False`.
+
+    Defaults to `300`.
     """

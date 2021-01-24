@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +32,15 @@ class TestShardCloseCode:
     @pytest.mark.parametrize(("code", "expected"), [(1000, True), (1001, True), (4000, False), (4014, False)])
     def test_is_standard_property(self, code, expected):
         assert errors.ShardCloseCode(code).is_standard is expected
+
+
+class TestComponentNotRunningError:
+    @pytest.fixture()
+    def error(self):
+        return errors.ComponentNotRunningError("some reason")
+
+    def test_str(self, error):
+        assert str(error) == "some reason"
 
 
 class TestGatewayError:
@@ -93,6 +103,9 @@ class TestBulkDeleteError:
 
     def test_percentage_completion_property(self, error):
         assert error.percentage_completion == 50
+
+    def test_str(self, error):
+        assert str(error) == "Error encountered when bulk deleting messages (10/20 messages deleted)"
 
 
 class TestMissingIntentError:

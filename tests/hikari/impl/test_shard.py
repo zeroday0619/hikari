@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -60,12 +61,12 @@ def proxy_settings():
 
 
 @pytest.mark.asyncio
-class Test_V6GatewayTransport:
+class Test_GatewayTransport:
     @pytest.fixture()
     def transport_impl(self):
         with mock.patch.object(aiohttp.ClientWebSocketResponse, "__init__"):
             transport = shard._GatewayTransport()
-            transport.logger = mock.Mock(getEffectiveLevel=mock.Mock(return_value=5))
+            transport.logger = mock.Mock(isEnabledFor=mock.Mock(return_value=True))
             transport.log_filterer = mock.Mock()
             yield transport
 
@@ -455,9 +456,7 @@ class Test_V6GatewayTransport:
         stack.enter_context(mock.patch.object(aiohttp, "TCPConnector"))
         stack.enter_context(mock.patch.object(aiohttp, "ClientTimeout"))
         stack.enter_context(
-            pytest.raises(
-                errors.GatewayError, match=r"Failed to connect to Discord: ClientConnectionError\('some error'\)"
-            )
+            pytest.raises(errors.GatewayConnectionError, match=r"Failed to connect to server: 'some error'")
         )
         logger = mock.Mock()
         log_filterer = mock.Mock()
@@ -490,10 +489,9 @@ class Test_V6GatewayTransport:
         stack.enter_context(mock.patch.object(aiohttp, "ClientTimeout"))
         stack.enter_context(
             pytest.raises(
-                errors.GatewayError,
+                errors.GatewayConnectionError,
                 match=(
-                    r"Failed to connect to Discord: "
-                    r"WSServerHandshakeError\(None, None, status=123, message='some error'\)"
+                    r'Failed to connect to server: "WSServerHandshakeError\(None, None, status=123, message=\'some error\'\)"'
                 ),
             )
         )
@@ -528,10 +526,9 @@ class Test_V6GatewayTransport:
         stack.enter_context(mock.patch.object(aiohttp, "ClientTimeout"))
         stack.enter_context(
             pytest.raises(
-                errors.GatewayError,
+                errors.GatewayConnectionError,
                 match=(
-                    r"Failed to connect to Discord: WSServerHandshakeError"
-                    r"\(None, None, status=500, message='some error'\)"
+                    r'Failed to connect to server: "WSServerHandshakeError\(None, None, status=500, message=\'some error\'\)"'
                 ),
             )
         )
@@ -567,10 +564,11 @@ class TestGatewayShardImpl:
     @pytest.fixture()
     def client(self, http_settings, proxy_settings, unslotted_client_type):
         return unslotted_client_type(
+            event_manager=mock.Mock(),
+            event_factory=mock.Mock(),
             url="wss://gateway.discord.gg",
             intents=intents.Intents.ALL,
             token="lol",
-            event_consumer=mock.Mock(),
             http_settings=http_settings,
             proxy_settings=proxy_settings,
         )
@@ -584,7 +582,8 @@ class TestGatewayShardImpl:
     )
     def test__init__sets_url_is_correct_json(self, compression, expect, http_settings, proxy_settings):
         g = shard.GatewayShardImpl(
-            event_consumer=mock.Mock(),
+            event_manager=mock.Mock(),
+            event_factory=mock.Mock(),
             http_settings=http_settings,
             proxy_settings=proxy_settings,
             intents=intents.Intents.ALL,
@@ -599,7 +598,8 @@ class TestGatewayShardImpl:
     def test_using_etf_is_unsupported(self, http_settings, proxy_settings):
         with pytest.raises(NotImplementedError, match="Unsupported gateway data format: etf"):
             shard.GatewayShardImpl(
-                event_consumer=mock.Mock(),
+                event_manager=mock.Mock(),
+                event_factory=mock.Mock(),
                 http_settings=http_settings,
                 proxy_settings=proxy_settings,
                 token=mock.Mock(),
@@ -638,29 +638,41 @@ class TestGatewayShardImpl:
         client._shard_count = 69
         assert client.shard_count == 69
 
+    def test_shard__check_if_alive_when_not_alive(self, client):
+        with mock.patch.object(shard.GatewayShardImpl, "is_alive", new=False):
+            with pytest.raises(errors.ComponentNotRunningError):
+                client._check_if_alive()
+
+    @hikari_test_helpers.assert_does_not_raise(errors.ComponentNotRunningError)
+    def test_shard__check_if_alive_when_alive(self, client):
+        with mock.patch.object(shard.GatewayShardImpl, "is_alive", new=True):
+            client._check_if_alive()
+
     async def test_close_when_closing_set(self, client):
         client._closing = mock.Mock(is_set=mock.Mock(return_value=True))
-        client._ws = mock.Mock()
+        client._send_close = mock.Mock()
         client._chunking_rate_limit = mock.Mock()
         client._total_rate_limit = mock.Mock()
 
         await client.close()
 
         client._closing.set.assert_not_called()
-        client._ws.close.assert_not_called()
+        client._send_close.assert_not_called()
         client._chunking_rate_limit.close.assert_not_called()
         client._total_rate_limit.close.assert_not_called()
 
     async def test_close_when_closing_not_set(self, client):
         client._closing = mock.Mock(is_set=mock.Mock(return_value=False))
-        client._ws = mock.Mock(close=mock.AsyncMock())
+        client._ws = mock.Mock(send_close=mock.AsyncMock())
         client._chunking_rate_limit = mock.Mock()
         client._total_rate_limit = mock.Mock()
 
         await client.close()
 
         client._closing.set.assert_called_once_with()
-        client._ws.close.assert_awaited_once_with(code=errors.ShardCloseCode.GOING_AWAY, message=b"shard disconnecting")
+        client._ws.send_close.assert_awaited_once_with(
+            code=errors.ShardCloseCode.GOING_AWAY, message=b"shard disconnecting"
+        )
         client._chunking_rate_limit.close.assert_called_once_with()
         client._total_rate_limit.close.assert_called_once_with()
 
@@ -695,56 +707,85 @@ class TestGatewayShardImpl:
         client._closed.wait.assert_awaited_once_with()
 
     async def test_request_guild_members_when_no_query_and_no_limit_and_GUILD_MEMBERS_not_enabled(self, client):
+        client._check_if_alive = mock.Mock()
         client._intents = intents.Intents.GUILD_INTEGRATIONS
 
         with pytest.raises(errors.MissingIntentError):
             await client.request_guild_members(123, query="", limit=0)
+        client._check_if_alive.assert_called_once_with()
 
     async def test_request_guild_members_when_presences_and_GUILD_PRESENCES_not_enabled(self, client):
+        client._check_if_alive = mock.Mock()
         client._intents = intents.Intents.GUILD_INTEGRATIONS
 
         with pytest.raises(errors.MissingIntentError):
             await client.request_guild_members(123, query="test", limit=1, include_presences=True)
+        client._check_if_alive.assert_called_once_with()
+
+    async def test_request_guild_members_when_presences_false_and_GUILD_PRESENCES_not_enabled(self, client):
+        client._check_if_alive = mock.Mock()
+        client._intents = intents.Intents.GUILD_INTEGRATIONS
+        client._send_json = mock.AsyncMock()
+
+        await client.request_guild_members(123, query="test", limit=1, include_presences=False)
+
+        client._send_json.assert_awaited_once_with(
+            {
+                "op": 8,
+                "d": {"guild_id": "123", "query": "test", "presences": False, "limit": 1},
+            }
+        )
+        client._check_if_alive.assert_called_once_with()
 
     @pytest.mark.parametrize("kwargs", [{"query": "some query"}, {"limit": 1}])
     async def test_request_guild_members_when_specifiying_users_with_limit_or_query(self, client, kwargs):
+        client._check_if_alive = mock.Mock()
         client._intents = intents.Intents.GUILD_INTEGRATIONS
 
         with pytest.raises(ValueError, match="Cannot specify limit/query with users"):
             await client.request_guild_members(123, users=[], **kwargs)
+        client._check_if_alive.assert_called_once_with()
 
     @pytest.mark.parametrize("limit", [-1, 101])
     async def test_request_guild_members_when_limit_under_0_or_over_100(self, client, limit):
+        client._check_if_alive = mock.Mock()
         client._intents = intents.Intents.ALL
 
         with pytest.raises(ValueError, match="'limit' must be between 0 and 100, both inclusive"):
             await client.request_guild_members(123, limit=limit)
+        client._check_if_alive.assert_called_once_with()
 
     async def test_request_guild_members_when_users_over_100(self, client):
+        client._check_if_alive = mock.Mock()
         client._intents = intents.Intents.ALL
 
         with pytest.raises(ValueError, match="'users' is limited to 100 users"):
             await client.request_guild_members(123, users=range(101))
+        client._check_if_alive.assert_called_once_with()
 
     async def test_request_guild_members_when_nonce_over_32_chars(self, client):
+        client._check_if_alive = mock.Mock()
         client._intents = intents.Intents.ALL
 
         with pytest.raises(ValueError, match="'nonce' can be no longer than 32 byte characters long."):
             await client.request_guild_members(123, nonce="x" * 33)
+        client._check_if_alive.assert_called_once_with()
 
     @pytest.mark.parametrize("include_presences", [True, False])
     async def test_request_guild_members(self, client, include_presences):
         client._intents = intents.Intents.ALL
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
+        client._check_if_alive = mock.Mock()
+        client._send_json = mock.AsyncMock()
 
         await client.request_guild_members(123, include_presences=include_presences)
 
-        client._ws.send_json.assert_awaited_once_with(
+        client._send_json.assert_awaited_once_with(
             {
                 "op": 8,
                 "d": {"guild_id": "123", "query": "", "presences": include_presences, "limit": 0},
             }
         )
+        client._check_if_alive.assert_called_once_with()
 
     async def test_start_when_already_running(self, client):
         client._run_task = object()
@@ -764,7 +805,7 @@ class TestGatewayShardImpl:
         create_task = stack.enter_context(mock.patch.object(asyncio, "create_task", side_effect=[run_task, waiter]))
         wait = stack.enter_context(mock.patch.object(asyncio, "wait", return_value=([run_task], [waiter])))
         stack.enter_context(
-            pytest.raises(asyncio.CancelledError, match="Shard 20 was closed before it could start successfully")
+            pytest.raises(asyncio.CancelledError, match="shard 20 was closed before it could start successfully")
         )
 
         with stack:
@@ -803,8 +844,8 @@ class TestGatewayShardImpl:
         wait.assert_awaited_once_with((waiter, run_task), return_when=asyncio.FIRST_COMPLETED)
 
     async def test_update_presence(self, client):
+        client._check_if_alive = mock.Mock()
         presence_payload = object()
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
         client._serialize_and_store_presence_payload = mock.Mock(return_value=presence_payload)
         client._send_json = mock.AsyncMock()
 
@@ -815,23 +856,25 @@ class TestGatewayShardImpl:
             activity=None,
         )
 
-        client._ws.send_json.assert_awaited_once_with({"op": 3, "d": presence_payload})
+        client._send_json.assert_awaited_once_with({"op": 3, "d": presence_payload})
+        client._check_if_alive.assert_called_once_with()
 
     @pytest.mark.parametrize("channel", [12345, None])
     @pytest.mark.parametrize("self_deaf", [True, False])
     @pytest.mark.parametrize("self_mute", [True, False])
     async def test_update_voice_state(self, client, channel, self_deaf, self_mute):
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
+        client._check_if_alive = mock.Mock()
+        client._send_json = mock.AsyncMock()
         payload = {
             "channel_id": str(channel) if channel is not None else None,
             "guild_id": "6969420",
-            "deaf": self_deaf,
-            "mute": self_mute,
+            "self_deaf": self_deaf,
+            "self_mute": self_mute,
         }
 
         await client.update_voice_state("6969420", channel, self_mute=self_mute, self_deaf=self_deaf)
 
-        client._ws.send_json.assert_awaited_once_with({"op": 4, "d": payload})
+        client._send_json.assert_awaited_once_with({"op": 4, "d": payload})
 
     def test_dispatch_when_READY(self, client):
         client._seq = 0
@@ -839,7 +882,7 @@ class TestGatewayShardImpl:
         client._user_id = 0
         client._logger = mock.Mock()
         client._handshake_completed = mock.Mock()
-        client._event_consumer = mock.Mock()
+        client._event_manager = mock.Mock()
 
         pl = {
             "session_id": 101,
@@ -870,7 +913,7 @@ class TestGatewayShardImpl:
             8,
         )
         client._handshake_completed.set.assert_called_once_with()
-        client._event_consumer.assert_called_once_with(
+        client._event_manager.consume_raw_event.assert_called_once_with(
             client,
             "READY",
             pl,
@@ -881,25 +924,40 @@ class TestGatewayShardImpl:
         client._session_id = 123
         client._logger = mock.Mock()
         client._handshake_completed = mock.Mock()
-        client._event_consumer = mock.Mock()
+        client._event_manager = mock.Mock()
 
         client._dispatch("RESUME", 10, {})
 
         assert client._seq == 10
         client._logger.info.assert_called_once_with("shard has resumed [session:%s, seq:%s]", 123, 10)
         client._handshake_completed.set.assert_called_once_with()
-        client._event_consumer.assert_called_once_with(client, "RESUME", {})
+        client._event_manager.consume_raw_event.assert_called_once_with(client, "RESUME", {})
 
     def test__dipatch(self, client):
         client._logger = mock.Mock()
         client._handshake_completed = mock.Mock()
-        client._event_consumer = mock.Mock()
+        client._event_manager = mock.Mock()
 
         client._dispatch("EVENT NAME", 10, {"payload": None})
 
         client._logger.info.assert_not_called()
+        client._logger.debug.assert_not_called()
         client._handshake_completed.set.assert_not_called()
-        client._event_consumer.assert_called_once_with(client, "EVENT NAME", {"payload": None})
+        client._event_manager.consume_raw_event.assert_called_once_with(client, "EVENT NAME", {"payload": None})
+
+    async def test__dispatch_for_unknown_event(self, client):
+        client._logger = mock.Mock()
+        client._handshake_completed = mock.Mock()
+        client._event_manager = mock.Mock(consume_raw_event=mock.Mock(side_effect=LookupError))
+
+        client._dispatch("UNEXISTING_EVENT", 10, {"payload": None})
+
+        client._logger.info.assert_not_called()
+        client._handshake_completed.set.assert_not_called()
+        client._event_manager.consume_raw_event.assert_called_once_with(client, "UNEXISTING_EVENT", {"payload": None})
+        client._logger.debug.assert_called_once_with(
+            "ignoring unknown event %s:\n    %r", "UNEXISTING_EVENT", {"payload": None}
+        )
 
     async def test__identify(self, client):
         client._token = "token"
@@ -908,7 +966,7 @@ class TestGatewayShardImpl:
         client._shard_id = 0
         client._shard_count = 1
         client._serialize_and_store_presence_payload = mock.Mock(return_value={"presence": "payload"})
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
+        client._send_json = mock.AsyncMock()
         stack = contextlib.ExitStack()
         stack.enter_context(mock.patch.object(platform, "system", return_value="Potato PC"))
         stack.enter_context(mock.patch.object(platform, "architecture", return_value=["ARM64"]))
@@ -934,7 +992,7 @@ class TestGatewayShardImpl:
                 "presence": {"presence": "payload"},
             },
         }
-        client._ws.send_json.assert_awaited_once_with(expected_json)
+        client._send_json.assert_awaited_once_with(expected_json)
 
     @hikari_test_helpers.timeout()
     async def test__heartbeat(self, client):
@@ -965,7 +1023,7 @@ class TestGatewayShardImpl:
         client._token = "token"
         client._seq = 123
         client._session_id = 456
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
+        client._send_json = mock.AsyncMock()
 
         await client._resume()
 
@@ -973,7 +1031,7 @@ class TestGatewayShardImpl:
             "op": 6,
             "d": {"token": "token", "seq": 123, "session_id": 456},
         }
-        client._ws.send_json.assert_awaited_once_with(expected_json)
+        client._send_json.assert_awaited_once_with(expected_json)
 
     @pytest.mark.skip("TODO")
     async def test__run(self, client):
@@ -984,22 +1042,22 @@ class TestGatewayShardImpl:
         ...
 
     async def test__send_heartbeat(self, client):
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
+        client._send_json = mock.AsyncMock()
         client._last_heartbeat_sent = 0
         client._seq = 10
 
         with mock.patch.object(time, "monotonic", return_value=200):
             await client._send_heartbeat()
 
-        client._ws.send_json.assert_awaited_once_with({"op": 1, "d": 10})
+        client._send_json.assert_awaited_once_with({"op": 1, "d": 10})
         assert client._last_heartbeat_sent == 200
 
     async def test__send_heartbeat_ack(self, client):
-        client._ws = mock.Mock(send_json=mock.AsyncMock())
+        client._send_json = mock.AsyncMock()
 
         await client._send_heartbeat_ack()
 
-        client._ws.send_json.assert_awaited_once_with({"op": 11, "d": None})
+        client._send_json.assert_awaited_once_with({"op": 11, "d": None})
 
     def test__serialize_activity_when_activity_is_None(self, client):
         assert client._serialize_activity(None) is None

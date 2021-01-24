@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,13 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import os as _os
-
-IS_CI = "CI" in _os.environ
-
-if "TRAVIS" in _os.environ:
-    CI_PROVIDER = "travis"
-else:
-    CI_PROVIDER = "other"
 
 # Packaging
 MAIN_PACKAGE = "hikari"

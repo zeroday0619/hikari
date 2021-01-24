@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -48,6 +49,8 @@ __all__: typing.List[str] = [
     "PartialGuild",
     "PartialIntegration",
     "PartialRole",
+    "WelcomeScreen",
+    "WelcomeChannel",
 ]
 
 import abc
@@ -57,6 +60,8 @@ import attr
 
 from hikari import files
 from hikari import snowflakes
+from hikari import traits
+from hikari import undefined
 from hikari import urls
 from hikari import users
 from hikari.internal import attr_extensions
@@ -72,8 +77,6 @@ if typing.TYPE_CHECKING:
     from hikari import emojis as emojis_
     from hikari import permissions as permissions_
     from hikari import presences as presences_
-    from hikari import traits
-    from hikari import undefined
     from hikari import voices as voices_
 
 
@@ -149,6 +152,12 @@ class GuildFeature(str, enums.Enum):
 
     WELCOME_SCREEN_ENABLED = "WELCOME_SCREEN_ENABLED"
     """Guild has enabled the welcome screen."""
+
+    MEMBER_VERIFICATION_GATE_ENABLED = "MEMBER_VERIFICATION_GATE_ENABLED"
+    """Guild has enabled Membership Screening."""
+
+    PREVIEW_ENABLED = "PREVIEW_ENABLED"
+    """Guild can be viewed before Membership Screening is complete."""
 
 
 GuildFeatureish = typing.Union[str, GuildFeature]
@@ -259,15 +268,20 @@ class Member(users.User):
     is_deaf: undefined.UndefinedOr[bool] = attr.ib(repr=False)
     """`builtins.True` if this member is deafened in the current voice channel.
 
-    This will be `hikari.undefined.UndefinedType if it's state is
+    This will be `hikari.undefined.UNDEFINED` if it's state is
     unknown.
     """
 
     is_mute: undefined.UndefinedOr[bool] = attr.ib(repr=False)
     """`builtins.True` if this member is muted in the current voice channel.
 
-    This will be `hikari.undefined.UndefinedType if it's state is unknown.
+    This will be `hikari.undefined.UNDEFINED` if it's state is unknown.
     """
+
+    is_pending: undefined.UndefinedOr[bool] = attr.ib(repr=False)
+    """Whether the user has passed the guild's membership screening requirements.
+
+    This will be `hikari.undefined.UNDEFINED` if it's state is unknown."""
 
     joined_at: datetime.datetime = attr.ib(repr=True)
     """The datetime of when this member joined the guild they belong to."""
@@ -397,7 +411,28 @@ class Member(users.User):
         typing.Optional[hikari.presences.MemberPresence]
             The member presence, or `builtins.None` if not known.
         """
-        return self.app.cache.get_presence(self.guild_id, self.id)
+        if not isinstance(self.user.app, traits.CacheAware):
+            return None
+
+        return self.user.app.cache.get_presence(self.guild_id, self.user.id)
+
+    @property
+    def roles(self) -> typing.Sequence[Role]:
+        """Return the roles the user has.
+
+        This will be empty if the roles are missing from the cache.
+
+        Returns
+        -------
+        typing.Sequence[hikari.guilds.Role]
+            The roles the users has.
+        """
+        if not isinstance(self.user.app, traits.CacheAware):
+            return []
+
+        roles_view = self.user.app.cache.get_roles_view_for_guild(self.guild_id)
+
+        return [r for r in roles_view.values() if r.id in self.role_ids]
 
     @property
     def top_role(self) -> typing.Optional[Role]:
@@ -409,13 +444,7 @@ class Member(users.User):
             `builtins.None` if the cache is missing the roles information or
             the highest role the user has.
         """
-        roles_view = self.app.cache.get_roles_view_for_guild(self.guild_id)
-
-        roles = sorted(
-            (r for r in roles_view.values() if r.id in self.role_ids),
-            key=lambda r: r.position,
-            reverse=True,
-        )
+        roles = sorted(self.roles, key=lambda r: r.position, reverse=True)
 
         try:
             return next(iter(roles))
@@ -437,7 +466,55 @@ class Member(users.User):
         hikari.guilds.Member
             An up-to-date view of this member.
         """
-        return await self.app.rest.fetch_member(self.guild_id, self.id)
+        return await self.user.app.rest.fetch_member(self.guild_id, self.user.id)
+
+    async def fetch_dm_channel(self) -> channels_.DMChannel:
+        return await self.user.fetch_dm_channel()
+
+    async def ban(
+        self,
+        *,
+        delete_message_days: undefined.UndefinedOr[int] = undefined.UNDEFINED,
+        reason: undefined.UndefinedOr[str] = undefined.UNDEFINED,
+    ) -> None:
+        """Ban this member from this guild.
+
+        Other Parameters
+        ----------------
+        delete_message_days : hikari.undefined.UndefinedNoneOr[builtins.int]
+            If provided, the number of days to delete messages for.
+            This must be between 0 and 7.
+        reason : hikari.undefined.UndefinedOr[builtins.str]
+            If provided, the reason that will be recorded in the audit logs.
+            Maximum of 512 characters.
+
+        Raises
+        ------
+        hikari.errors.BadRequestError
+            If any of the fields that are passed have an invalid value.
+        hikari.errors.ForbiddenError
+            If you are missing the `BAN_MEMBERS` permission.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.NotFoundError
+            If the guild or user are not found.
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+        await self.user.app.rest.ban_user(
+            self.guild_id, self.user.id, delete_message_days=delete_message_days, reason=reason
+        )
 
     def __str__(self) -> str:
         return str(self.user)
@@ -505,6 +582,21 @@ class Role(PartialRole):
     and increase as you go up the hierarchy.
     """
 
+    bot_id: typing.Optional[snowflakes.Snowflake] = attr.ib(eq=False, hash=False, repr=True)
+    """The ID of the bot this role belongs to.
+
+    If `builtins.None`, this is not a bot role.
+    """
+
+    integration_id: typing.Optional[snowflakes.Snowflake] = attr.ib(eq=False, hash=False, repr=True)
+    """The ID of the integration this role belongs to.
+
+    If `builtins.None`, this is not a integration role.
+    """
+
+    is_premium_subscriber_role: bool = attr.ib(eq=False, hash=False, repr=True)
+    """Whether this role is the guild's nitro subscriber role."""
+
     @property
     def colour(self) -> colours.Colour:
         """Alias for the `color` field."""
@@ -547,10 +639,11 @@ class IntegrationAccount:
         return self.name
 
 
+# This is here rather than in applications.py to avoid circular imports
 @attr_extensions.with_copy
 @attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
-class IntegrationApplication:
-    """An application that's linked to an integration."""
+class PartialApplication(snowflakes.Unique):
+    """A partial representation of a Discord application."""
 
     id: snowflakes.Snowflake = attr.ib(eq=True, hash=True, repr=True)
     """The ID of this entity."""
@@ -558,57 +651,75 @@ class IntegrationApplication:
     name: str = attr.ib(eq=False, hash=False, repr=True)
     """The name of this application."""
 
+    # TODO: default to None for consistency?
+    description: str = attr.ib(eq=False, hash=False, repr=False)
+    """The description of this application, or an empty string if undefined."""
+
     icon_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
-    """The icon hash of this application."""
+    """The CDN hash of this application's icon, if set."""
 
     summary: str = attr.ib(eq=False, hash=False, repr=False)
-    """The summary of this application."""
+    """This summary for this application's primary SKU if it's sold on Discord.
 
-    description: str = attr.ib(eq=False, hash=False, repr=False)
-    """The description of this application."""
+    Will be an empty string if undefined.
+    """
 
-    bot: typing.Optional[users.User] = attr.ib(eq=False, hash=False, repr=False)
-    """The bot associated with this application."""
+    def __str__(self) -> str:
+        return self.name
 
-    def format_avatar(self, *, ext: str = "png", size: int = 4096) -> typing.Optional[files.URL]:
-        """Generate the avatar for this application, if set.
-
-        Parameters
-        ----------
-        ext : typing.Optional[builtins.str]
-            The ext to use for this URL, defaults to `png` or `gif`.
-            Supports `png`, `jpeg`, `jpg`, `webp` and `gif` (when
-            animated).
-
-            Defaults to `png`.
-        size : builtins.int
-            The size to set for the URL, defaults to `4096`.
-            Can be any power of two between 16 and 4096.
-            Will be ignored for default avatars.
+    @property
+    def icon_url(self) -> typing.Optional[files.URL]:
+        """Team icon, if there is one.
 
         Returns
         -------
         typing.Optional[hikari.files.URL]
-            The URL to the avatar, or `builtins.None` if not present.
+            The URL, or `builtins.None` if no icon exists.
+        """
+        return self.format_icon()
+
+    def format_icon(self, *, ext: str = "png", size: int = 4096) -> typing.Optional[files.URL]:
+        """Generate the icon for this application.
+
+        Parameters
+        ----------
+        ext : builtins.str
+            The extension to use for this URL, defaults to `png`.
+            Supports `png`, `jpeg`, `jpg` and `webp`.
+        size : builtins.int
+            The size to set for the URL, defaults to `4096`.
+            Can be any power of two between 16 and 4096.
+
+        Returns
+        -------
+        typing.Optional[hikari.files.URL]
+            The URL, or `builtins.None` if no icon exists.
 
         Raises
         ------
         builtins.ValueError
-            If `size` is not a power of two or not between 16 and 4096.
+            If the size is not an integer power of 2 between 16 and 4096
+            (inclusive).
         """
         if self.icon_hash is None:
             return None
 
         return routes.CDN_APPLICATION_ICON.compile_to_file(
             urls.CDN_URL,
-            user_id=self.id,
+            application_id=self.id,
             hash=self.icon_hash,
             size=size,
             file_format=ext,
         )
 
-    def __str__(self) -> str:
-        return self.name
+
+@attr_extensions.with_copy
+@attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
+class IntegrationApplication(PartialApplication):
+    """An application that's linked to an integration."""
+
+    bot: typing.Optional[users.User] = attr.ib(eq=False, hash=False, repr=False)
+    """The bot associated with this application."""
 
 
 @attr_extensions.with_copy
@@ -635,6 +746,9 @@ class PartialIntegration(snowflakes.Unique):
 @attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
 class Integration(PartialIntegration):
     """Represents a guild integration object."""
+
+    guild_id: snowflakes.Snowflake = attr.ib()
+    """The ID of the guild this integration belongs to."""
 
     expire_behavior: typing.Union[IntegrationExpireBehaviour, int, None] = attr.ib(eq=False, hash=False, repr=False)
     """How members should be treated after their connected subscription expires.
@@ -687,6 +801,33 @@ class Integration(PartialIntegration):
 
 
 @attr_extensions.with_copy
+@attr.s(eq=True, hash=False, init=True, slots=True, weakref_slot=False)
+class WelcomeChannel:
+    """Used to represent channels on guild welcome screens."""
+
+    channel_id: snowflakes.Snowflake = attr.ib(eq=True, hash=False, repr=True)
+    """ID of the channel shown in the welcome screen."""
+
+    description: str = attr.ib(eq=True, hash=False, repr=False)
+    """The description shown for this channel."""
+
+    emoji: typing.Optional[emojis_.Emoji] = attr.ib(default=None, kw_only=True, eq=True, hash=False, repr=True)
+    """The emoji shown in the welcome screen channel if set else `builtins.None`."""
+
+
+@attr_extensions.with_copy
+@attr.s(eq=True, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
+class WelcomeScreen:
+    """Used to represent guild welcome screens on Discord."""
+
+    description: typing.Optional[str] = attr.ib(eq=True, hash=False, repr=True)
+    """The guild's description shown in the welcome screen."""
+
+    channels: typing.Sequence[WelcomeChannel] = attr.ib(eq=True, hash=False, repr=True)
+    """An array of up to 5 of the channels shown in the welcome screen."""
+
+
+@attr_extensions.with_copy
 @attr.s(eq=True, hash=False, init=True, kw_only=True, slots=True, weakref_slot=False)
 class GuildMemberBan:
     """Used to represent guild bans."""
@@ -705,9 +846,6 @@ class PartialGuild(snowflakes.Unique):
 
     app: traits.RESTAware = attr.ib(repr=False, eq=False, hash=False, metadata={attr_extensions.SKIP_DEEP_COPY: True})
     """The client application that models may use for procedures."""
-
-    features: typing.Sequence[GuildFeatureish] = attr.ib(eq=False, hash=False, repr=False)
-    """A list of the features in this guild."""
 
     id: snowflakes.Snowflake = attr.ib(eq=True, hash=True, repr=True)
     """The ID of this entity."""
@@ -787,7 +925,10 @@ class PartialGuild(snowflakes.Unique):
 
 @attr.s(eq=True, hash=True, init=True, kw_only=True, slots=True, weakref_slot=False)
 class GuildPreview(PartialGuild):
-    """A preview of a guild with the `GuildFeature.PUBLIC` feature."""
+    """A preview of a guild with the `GuildFeature.DISCOVERABLE` feature."""
+
+    features: typing.Sequence[GuildFeatureish] = attr.ib(eq=False, hash=False, repr=False)
+    """A list of the features in this guild."""
 
     splash_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
     """The hash of the splash for the guild, if there is one."""
@@ -888,6 +1029,9 @@ class GuildPreview(PartialGuild):
 class Guild(PartialGuild, abc.ABC):
     """A representation of a guild on Discord."""
 
+    features: typing.Sequence[GuildFeatureish] = attr.ib(eq=False, hash=False, repr=False)
+    """A list of the features in this guild."""
+
     application_id: typing.Optional[snowflakes.Snowflake] = attr.ib(eq=False, hash=False, repr=False)
     """The ID of the application that created this guild.
 
@@ -955,7 +1099,7 @@ class Guild(PartialGuild, abc.ABC):
     preferred_locale: str = attr.ib(eq=False, hash=False, repr=False)
     """The preferred locale to use for this guild.
 
-    This can only be change if `GuildFeature.PUBLIC` is in `Guild.features`
+    This can only be change if `GuildFeature.COMMUNITY` is in `Guild.features`
     for this guild and will otherwise default to `en-US`.
     """
 
@@ -972,7 +1116,7 @@ class Guild(PartialGuild, abc.ABC):
     """The channel ID of the channel where admins and moderators receive notices
     from Discord.
 
-    This is only present if `GuildFeature.PUBLIC` is in `Guild.features` for
+    This is only present if `GuildFeature.COMMUNITY` is in `Guild.features` for
     this guild. For all other purposes, it should be considered to be `builtins.None`.
     """
 
@@ -980,10 +1124,10 @@ class Guild(PartialGuild, abc.ABC):
     """The voice region for the guild."""
 
     rules_channel_id: typing.Optional[snowflakes.Snowflake] = attr.ib(eq=False, hash=False, repr=False)
-    """The ID of the channel where guilds with the `GuildFeature.PUBLIC`
+    """The ID of the channel where guilds with the `GuildFeature.COMMUNITY`
     `features` display rules and guidelines.
 
-    If the `GuildFeature.PUBLIC` feature is not defined, then this is `builtins.None`.
+    If the `GuildFeature.COMMUNITY` feature is not defined, then this is `builtins.None`.
     """
 
     splash_hash: typing.Optional[str] = attr.ib(eq=False, hash=False, repr=False)
@@ -1182,11 +1326,17 @@ class RESTGuild(Guild):
     _roles: typing.Mapping[snowflakes.Snowflake, Role] = attr.ib(eq=False, hash=False, repr=False)
     """The roles in this guild, represented as a mapping of role ID to role object."""
 
-    approximate_active_member_count: int = attr.ib(eq=False, hash=False, repr=False)
-    """The approximate number of members in the guild that are not offline."""
+    approximate_active_member_count: typing.Optional[int] = attr.ib(eq=False, hash=False, repr=False)
+    """The approximate number of members in the guild that are not offline.
 
-    approximate_member_count: int = attr.ib(eq=False, hash=False, repr=False)
-    """The approximate number of members in the guild."""
+    This will be `builtins.None` when creating a guild.
+    """
+
+    approximate_member_count: typing.Optional[int] = attr.ib(eq=False, hash=False, repr=False)
+    """The approximate number of members in the guild.
+
+    This will be `builtins.None` when creating a guild.
+    """
 
     max_presences: int = attr.ib(eq=False, hash=False, repr=False)
     """The maximum number of presences for the guild."""
@@ -1256,11 +1406,17 @@ class GatewayGuild(Guild):
             A mapping of channel IDs to objects of the channels cached for the
             guild.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return {}
+
         return self.app.cache.get_guild_channels_view_for_guild(self.id)
 
     @property
     def emojis(self) -> typing.Mapping[snowflakes.Snowflake, emojis_.KnownCustomEmoji]:
         # <<inherited docstring from Guild>>.
+        if not isinstance(self.app, traits.CacheAware):
+            return {}
+
         return self.app.cache.get_emojis_view_for_guild(self.id)
 
     @property
@@ -1270,6 +1426,9 @@ class GatewayGuild(Guild):
         typing.Mapping[hikari.snowflakes.Snowflake, Member]
             A mapping of user IDs to objects of the members cached for the guild.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return {}
+
         return self.app.cache.get_members_view_for_guild(self.id)
 
     @property
@@ -1280,11 +1439,17 @@ class GatewayGuild(Guild):
             A mapping of user IDs to objects of the presences cached for the
             guild.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return {}
+
         return self.app.cache.get_presences_view_for_guild(self.id)
 
     @property
     def roles(self) -> typing.Mapping[snowflakes.Snowflake, Role]:
         # <<inherited docstring from Guild>>.
+        if not isinstance(self.app, traits.CacheAware):
+            return {}
+
         return self.app.cache.get_roles_view_for_guild(self.id)
 
     @property
@@ -1297,6 +1462,9 @@ class GatewayGuild(Guild):
             A mapping of user IDs to objects of the voice states cached for the
             guild.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return {}
+
         return self.app.cache.get_voice_states_view_for_guild(self.id)
 
     def get_channel(
@@ -1315,6 +1483,9 @@ class GatewayGuild(Guild):
         typing.Optional[hikari.channels.GuildChannel]
             The object of the guild channel found in cache or `builtins.None.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_guild_channel(snowflakes.Snowflake(channel))
 
     def get_emoji(
@@ -1333,6 +1504,9 @@ class GatewayGuild(Guild):
             The object of the custom emoji if found in cache, else
             `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_emoji(snowflakes.Snowflake(emoji))
 
     def get_member(self, user: snowflakes.SnowflakeishOr[users.User]) -> typing.Optional[Member]:
@@ -1348,6 +1522,9 @@ class GatewayGuild(Guild):
         typing.Optional[Member]
             The cached member object if found, else `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_member(self.id, snowflakes.Snowflake(user))
 
     def get_my_member(self) -> typing.Optional[Member]:
@@ -1360,6 +1537,9 @@ class GatewayGuild(Guild):
             This will be sent on each `hikari.events.guild_events.GuildAvailableEvent`,
             as well as any presence updates if you have opted into them.
         """
+        if not isinstance(self.app, traits.ShardAware):
+            return None
+
         me = self.app.me
         if me is None:
             return None
@@ -1379,6 +1559,9 @@ class GatewayGuild(Guild):
         typing.Optional[hikari.presences.MemberPresence]
             The cached presence object if found, else `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_presence(self.id, snowflakes.Snowflake(user))
 
     def get_role(self, role: snowflakes.SnowflakeishOr[Role]) -> typing.Optional[Role]:
@@ -1394,6 +1577,9 @@ class GatewayGuild(Guild):
         typing.Optional[Role]
             The object of the role found in cache, else `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_role(snowflakes.Snowflake(role))
 
     def get_voice_state(self, user: snowflakes.SnowflakeishOr[users.User]) -> typing.Optional[voices_.VoiceState]:
@@ -1409,4 +1595,7 @@ class GatewayGuild(Guild):
         typing.Optional[hikari.voices.VoiceState]
             The cached voice state object if found, else `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_voice_state(self.id, snowflakes.Snowflake(user))

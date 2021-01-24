@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +42,7 @@ class UndefinedType:
 
     __slots__: typing.Sequence[str] = ()
 
-    def __bool__(self) -> bool:
+    def __bool__(self) -> typing.Literal[False]:
         return False
 
     def __copy__(self: SelfT) -> SelfT:

@@ -1,5 +1,5 @@
 [![Hikari PyPI version badge](https://img.shields.io/pypi/v/hikari)](https://pypi.org/project/hikari)
-[![Travis CI Build Status badge](https://travis-ci.com/hikari-py/hikari.svg?branch=master)](https://travis-ci.com/github/hikari-py/hikari)
+[![Github Actions Status badge](https://github.com/hikari-py/hikari/workflows/CI/badge.svg)](https://github.com/hikari-py/hikari/actions)
 [![Supported Python verisons badge](https://img.shields.io/pypi/pyversions/hikari)](https://pypi.org/project/hikari)
 [![Maintainability badge](https://api.codeclimate.com/v1/badges/f95070b25136a69b0589/maintainability)](https://codeclimate.com/github/hikari-py/hikari/maintainability)
 [![Test Coverage badge](https://api.codeclimate.com/v1/badges/f95070b25136a69b0589/test_coverage)](https://codeclimate.com/github/hikari-py/hikari/test_coverage)
@@ -7,7 +7,7 @@
 [![Issues badge](https://img.shields.io/github/issues-raw/hikari-py/hikari)](https://github.com/hikari-py/hikari/issues)
 [![This project uses Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://pypi.org/project/black/)
 [![This project uses MyPy](http://www.mypy-lang.org/static/mypy_badge.svg)](https://pypi.org/project/mypy/)
-[![Documentation badge](https://img.shields.io/badge/documentation-up-00FF00.svg)](https://hikari-py.github.io/hikari/hikari)
+[![Documentation badge](https://img.shields.io/badge/documentation-up-00FF00.svg)](https://hikari-py.github.io/hikari/documentation)
 
 [![discord](https://discord.com/api/guilds/574921006817476608/widget.png?style=banner2)](https://discord.gg/Jx4cNGG)
 
@@ -37,7 +37,7 @@ async def ping(event: hikari.GuildMessageCreateEvent) -> None:
         return
 
     if event.content.startswith("hk.ping"):
-        await event.message.reply("Pong!")
+        await event.message.respond("Pong!")
 
 bot.run()
 ```
@@ -126,9 +126,9 @@ OAuth2 client implementations, such as
 Install hikari from PyPI with the following command:
 
 ```bash
-python -m pip install hikari -U --pre
+python -m pip install -U hikari
 # Windows users may need to run this instead...
-py -3 -m pip install hikari -U --pre
+py -3 -m pip install -U hikari
 ```
 
 ---
@@ -167,8 +167,8 @@ settings in the interpreter.
 
 If you have a C compiler (Microsoft VC++ Redistributable 14.0 or newer, or a
 modern copy of GCC/G++, Clang, etc), you can install hikari using
-`pip install -U hikari[speedups]`. This will install `aiodns`, `cchardet`,  and
-`ciso8601`, which will provide you with a small performance boost.
+`pip install -U hikari[speedups]`. This will install `aiodns`, `cchardet`, `Brotli`
+and `ciso8601`, which will provide you with a small performance boost.
 
 ### `uvloop`
 

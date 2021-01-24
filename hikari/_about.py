@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,14 +26,15 @@
 # FROM THE CI SCRIPT AND DOING THIS MAY LEAD TO THE DEPLOY PROCESS FAILING.
 
 __author__ = "Nekokatt"
-__ci__ = "https://travis-ci.com/github/hikari-py/hikari"
-__copyright__ = "© 2020 Nekokatt"
+__maintainer__ = "davfsa"
+__ci__ = "https://github.com/hikari-py/hikari/actions"
+__copyright__ = "© 2021 davfsa"
 __coverage__ = "https://codeclimate.com/github/hikari-py/hikari"
 __discord_invite__ = "https://discord.gg/Jx4cNGG"
-__docs__ = "https://hikari-py.github.io/hikari/hikari"
+__docs__ = "https://hikari-py.github.io/hikari/documentation"
 __email__ = "davfsa@gmail.com"
 __issue_tracker__ = "https://github.com/hikari-py/hikari/issues"
 __license__ = "MIT"
 __url__ = "https://github.com/hikari-py/hikari"
-__version__ = "2.0.0"
+__version__ = "SNAPSHOT"
 __git_sha1__ = "HEAD"

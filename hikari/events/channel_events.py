@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -128,6 +129,9 @@ class GuildChannelEvent(ChannelEvent, abc.ABC):
             The gateway guild this event relates to, if known. Otherwise
             this will return `builtins.None`.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_available_guild(self.guild_id) or self.app.cache.get_unavailable_guild(self.guild_id)
 
     async def fetch_guild(self) -> guilds.RESTGuild:
@@ -152,6 +156,9 @@ class GuildChannelEvent(ChannelEvent, abc.ABC):
             The cached channel this event relates to. If not known, this
             will return `builtins.None` instead.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_guild_channel(self.channel_id)
 
     async def fetch_channel(self) -> channels.GuildChannel:
@@ -278,6 +285,12 @@ class GuildChannelUpdateEvent(GuildChannelEvent, ChannelUpdateEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring from ShardEvent>>.
+
+    old_channel: typing.Optional[channels.GuildChannel] = attr.ib(repr=True)
+    """The old guild channel object.
+
+    This will be `builtins.None` if the channel missing from the cache.
+    """
 
     channel: channels.GuildChannel = attr.ib(repr=True)
     """Guild channel that this event represents.
@@ -430,8 +443,11 @@ class GuildPinsUpdateEvent(PinsUpdateEvent, GuildChannelEvent):
             The cached channel this event relates to. If not known, this
             will return `builtins.None` instead.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         channel = self.app.cache.get_guild_channel(self.channel_id)
-        assert isinstance(channel, channels.GuildTextChannel)
+        assert channel is None or isinstance(channel, channels.GuildTextChannel)
         return channel
 
     async def fetch_channel(self) -> channels.GuildTextChannel:

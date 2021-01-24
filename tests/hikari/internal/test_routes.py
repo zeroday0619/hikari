@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -218,7 +219,7 @@ class TestCDNRoute:
                 "http://example.com",
                 "/{foo}/{bar}",
                 "PNG",
-                dict(size=128),
+                {"size": 128},
                 "baz",
                 "bork qux",
                 "http://example.com/baz/bork%20qux.png?size=128",
@@ -227,7 +228,7 @@ class TestCDNRoute:
                 "http://example.com",
                 "/{foo}/bar",
                 "jpg",
-                dict(size=128),
+                {"size": 128},
                 "baz",
                 "bork qux",
                 "http://example.com/baz/bar.jpg?size=128",
@@ -236,7 +237,7 @@ class TestCDNRoute:
                 "http://example.com",
                 "/{foo}/{bar}",
                 "WEBP",
-                dict(size=None),
+                {"size": None},
                 "baz",
                 123456,
                 "http://example.com/baz/123456.webp",
@@ -245,7 +246,7 @@ class TestCDNRoute:
                 "http://example.com",
                 "/{foo}/bar",
                 "GIF",
-                dict(size=None),
+                {"size": None},
                 "baz",
                 "bork qux",
                 "http://example.com/baz/bar.gif",

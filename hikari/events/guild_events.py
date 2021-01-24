@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +35,10 @@ __all__: typing.List[str] = [
     "BanCreateEvent",
     "BanDeleteEvent",
     "EmojisUpdateEvent",
-    "IntegrationsUpdateEvent",
+    "IntegrationEvent",
+    "IntegrationCreateEvent",
+    "IntegrationDeleteEvent",
+    "IntegrationUpdateEvent",
     "PresenceUpdateEvent",
 ]
 
@@ -89,6 +93,9 @@ class GuildEvent(shard_events.ShardEvent, abc.ABC):
         typing.Optional[hikari.guilds.GatewayGuild]
             The guild this event relates to, or `builtins.None` if not known.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_available_guild(self.guild_id) or self.app.cache.get_unavailable_guild(self.guild_id)
 
     async def fetch_guild(self) -> guilds.RESTGuild:
@@ -207,6 +214,20 @@ class GuildAvailableEvent(GuildVisibilityEvent):
         The voice states active in the guild.
     """
 
+    chunk_nonce: typing.Optional[str] = attr.ib(repr=False, default=None)
+    """Nonce used to request the member chunks for this guild.
+
+    This will be `builtins.None` if no chunks were requested.
+
+    !!! note
+        This is a syntetic field.
+
+    Returns
+    -------
+    typing.Optional[builtins.str]
+        The nonce used to request the member chunks.
+    """
+
     @property
     def guild_id(self) -> snowflakes.Snowflake:
         # <<inherited docstring from GuildEvent>>.
@@ -264,6 +285,12 @@ class GuildUpdateEvent(GuildEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring from ShardEvent>>.
+
+    old_guild: typing.Optional[guilds.Guild] = attr.ib()
+    """The old guild object.
+
+    This will be `builtins.None` if the guild missing from the cache.
+    """
 
     guild: guilds.GatewayGuild = attr.ib()
     """Guild that was just updated.
@@ -390,6 +417,12 @@ class EmojisUpdateEvent(GuildEvent):
     guild_id: snowflakes.Snowflake = attr.ib()
     # <<inherited docstring from GuildEvent>>.
 
+    old_emojis: typing.Optional[typing.Sequence[emojis_.KnownCustomEmoji]] = attr.ib()
+    """Sequence of all old emojis in this guild.
+
+    This will be `builtins.None` if it's missing from the cache.
+    """
+
     emojis: typing.Sequence[emojis_.KnownCustomEmoji] = attr.ib()
     """Sequence of all emojis in this guild.
 
@@ -410,33 +443,32 @@ class EmojisUpdateEvent(GuildEvent):
         return await self.app.rest.fetch_guild_emojis(self.guild_id)
 
 
-@attr_extensions.with_copy
 @attr.s(kw_only=True, slots=True, weakref_slot=False)
-@base_events.requires_intents(intents.Intents.GUILD_EMOJIS)
-class IntegrationsUpdateEvent(GuildEvent):
-    """Event that is fired when the integrations in a guild are changed.
+@base_events.requires_intents(intents.Intents.GUILD_INTEGRATIONS)
+class IntegrationEvent(GuildEvent, abc.ABC):
+    """Event base for any integration related events."""
 
-    This may occur when integrations are created, updated, or deleted.
+    @property
+    @abc.abstractmethod
+    def application_id(self) -> typing.Optional[snowflakes.Snowflake]:
+        """ID of Discord bot application this integration is connected to.
 
-    !!! note
-        This event is similar to
-        `hikari.events.channel_events.WebhookUpdateEvent` in that Discord
-        does not provide any information on what was actually changed, nor
-        how it was changed. The only way you will be able to determine this is
-        to keep a cache of this information manually up to date by fetching
-        it using REST API calls. This is a limitation of Discord's design.
-        We agree that it is not overly helpful to you.
-    """
+        Returns
+        -------
+        typing.Optional[hikari.snowflakes.Snowflake]
+            The ID of Discord bot application this integration is connected to.
+        """
 
-    app: traits.RESTAware = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
-    # <<inherited docstring from Event>>.
+    @property
+    @abc.abstractmethod
+    def id(self) -> snowflakes.Snowflake:
+        """ID of the integration.
 
-    shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
-    # <<inherited docstring from ShardEvent>>.
-
-    guild_id: snowflakes.Snowflake = attr.ib()
-
-    # <<inherited docstring from ShardEvent>>.
+        Returns
+        -------
+        hikari.snowflakes.Snowflake
+            The ID of the integration.
+        """
 
     async def fetch_integrations(self) -> typing.Sequence[guilds.Integration]:
         """Perform an API call to fetch some number of guild integrations.
@@ -455,6 +487,90 @@ class IntegrationsUpdateEvent(GuildEvent):
             probably.
         """
         return await self.app.rest.fetch_integrations(self.guild_id)
+
+
+@attr_extensions.with_copy
+@attr.s(kw_only=True, slots=True, weakref_slot=False)
+@base_events.requires_intents(intents.Intents.GUILD_INTEGRATIONS)
+class IntegrationCreateEvent(IntegrationEvent):
+    """Event that is fired when an integration is created in a guild."""
+
+    app: traits.RESTAware = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
+    # <<inherited docstring from Event>>.
+
+    shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
+    # <<inherited docstring from ShardEvent>>.
+
+    integration: guilds.Integration = attr.ib()
+    """Integration that was created."""
+
+    @property
+    def application_id(self) -> typing.Optional[snowflakes.Snowflake]:
+        # <<inherited docstring from IntegrationEvent>>.
+        return self.integration.application.id if self.integration.application else None
+
+    @property
+    def guild_id(self) -> snowflakes.Snowflake:
+        # <<inherited docstring from ShardEvent>>.
+        return self.integration.guild_id
+
+    @property
+    def id(self) -> snowflakes.Snowflake:
+        # <<inherited docstring from IntegrationEvent>>
+        return self.integration.id
+
+
+@attr_extensions.with_copy
+@attr.s(kw_only=True, slots=True, weakref_slot=False)
+@base_events.requires_intents(intents.Intents.GUILD_INTEGRATIONS)
+class IntegrationDeleteEvent(IntegrationEvent):
+    """Event that is fired when an integration is deleted in a guild."""
+
+    app: traits.RESTAware = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
+    # <<inherited docstring from Event>>.
+
+    shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
+    # <<inherited docstring from ShardEvent>>.
+
+    application_id: typing.Optional[snowflakes.Snowflake] = attr.ib()
+    # <<inherited docstring from IntegrationEvent>>.
+
+    guild_id: snowflakes.Snowflake = attr.ib()
+    # <<inherited docstring from ShardEvent>>.
+
+    id: snowflakes.Snowflake = attr.ib()
+    # <<inherited docstring from IntegrationEvent>>
+
+
+@attr_extensions.with_copy
+@attr.s(kw_only=True, slots=True, weakref_slot=False)
+@base_events.requires_intents(intents.Intents.GUILD_INTEGRATIONS)
+class IntegrationUpdateEvent(IntegrationEvent):
+    """Event that is fired when an integration is updated in a guild."""
+
+    app: traits.RESTAware = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
+    # <<inherited docstring from Event>>.
+
+    shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
+    # <<inherited docstring from ShardEvent>>.
+
+    integration: guilds.Integration = attr.ib()
+    """Integration that was updated."""
+
+    @property
+    def application_id(self) -> typing.Optional[snowflakes.Snowflake]:
+        # <<inherited docstring from IntegrationEvent>>.
+        return self.integration.application.id if self.integration.application else None
+
+    @property
+    def guild_id(self) -> snowflakes.Snowflake:
+        # <<inherited docstring from GuildEvent>>.
+        return self.integration.guild_id
+
+    @property
+    def id(self) -> snowflakes.Snowflake:
+        # <<inherited docstring from IntegrationEvent>>
+        return self.integration.id
 
 
 @attr_extensions.with_copy
@@ -479,6 +595,12 @@ class PresenceUpdateEvent(shard_events.ShardEvent):
 
     shard: gateway_shard.GatewayShard = attr.ib(metadata={attr_extensions.SKIP_DEEP_COPY: True})
     # <<inherited docstring from ShardEvent>>.
+
+    old_presence: typing.Optional[presences_.MemberPresence] = attr.ib()
+    """The old member presence object.
+
+    This will be `builtins.None` if the member presence missing from the cache.
+    """
 
     presence: presences_.MemberPresence = attr.ib()
     """Member presence.
@@ -527,8 +649,7 @@ class PresenceUpdateEvent(shard_events.ShardEvent):
         """
         return self.presence.guild_id
 
-    # TODO: make this nicer, as it is inconsistent with stuff elsewhere I guess.
-    def get_cached_user(self) -> typing.Optional[users.User]:
+    def get_user(self) -> typing.Optional[users.User]:
         """Get the full cached user, if it is available.
 
         Returns
@@ -536,6 +657,9 @@ class PresenceUpdateEvent(shard_events.ShardEvent):
         typing.Optional[hikari.users.User]
             The full cached user, or `builtins.None` if not cached.
         """
+        if not isinstance(self.app, traits.CacheAware):
+            return None
+
         return self.app.cache.get_user(self.user_id)
 
     async def fetch_user(self) -> users.User:

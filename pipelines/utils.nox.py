@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """Additional utilities for Nox."""
+import os
 import shutil
 
 from pipelines import nox
@@ -32,6 +34,8 @@ TRASH = [
     ".coverage",
     ".pytest_cache",
     ".mypy_cache",
+    "node_modules",
+    "package-lock.json",
 ]
 
 
@@ -40,4 +44,10 @@ def purge(_: nox.Session) -> None:
     """Delete any nox-generated files."""
     for trash in TRASH:
         print("Removing", trash)
+        try:
+            os.remove(trash)
+        except:
+            # Ignore errors
+            pass
+
         shutil.rmtree(trash, ignore_errors=True)

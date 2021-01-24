@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -63,7 +64,8 @@ setuptools.setup(
     long_description=long_description(),
     long_description_content_type="text/markdown",
     author=metadata.author,
-    author_email=metadata.email,
+    maintainer=metadata.maintainer,
+    maintainer_email=metadata.email,
     license=metadata.license,
     url=metadata.url,
     project_urls={
@@ -92,8 +94,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        # TODO: enable when PyPI release with newest trove-classifiers dependency.
-        # "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: Stackless",
         "Topic :: Communications :: Chat",

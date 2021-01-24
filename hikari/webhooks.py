@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # cython: language_level=3
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -107,6 +108,18 @@ class Webhook(snowflakes.Unique):
     application_id: typing.Optional[snowflakes.Snowflake] = attr.ib(eq=False, hash=False, repr=False)
     """The ID of the application that created this webhook."""
 
+    source_channel: typing.Optional[channels_.PartialChannel] = attr.ib(eq=False, hash=False, repr=True)
+    """The partial object of the channel a `CHANNEL_FOLLOWER` webhook is following.
+
+    Will be `builtins.None` for other webhook types.
+    """
+
+    source_guild: typing.Optional[guilds_.PartialGuild] = attr.ib(eq=False, hash=False, repr=True)
+    """The partial object of the guild a `CHANNEL_FOLLOWER` webhook is following.
+
+    Will be `builtins.None` for other webhook types.
+    """
+
     def __str__(self) -> str:
         return self.name if self.name is not None else f"Unnamed webhook ID {self.id}"
 
@@ -147,10 +160,10 @@ class Webhook(snowflakes.Unique):
         embeds: undefined.UndefinedOr[typing.Sequence[embeds_.Embed]] = undefined.UNDEFINED,
         mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
         user_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[users_.PartialUser]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[users_.PartialUser], bool]
         ] = undefined.UNDEFINED,
         role_mentions: undefined.UndefinedOr[
-            typing.Union[typing.Collection[snowflakes.SnowflakeishOr[guilds_.PartialRole]], bool]
+            typing.Union[snowflakes.SnowflakeishSequence[guilds_.PartialRole], bool]
         ] = undefined.UNDEFINED,
     ) -> messages_.Message:
         """Execute the webhook to create a message.
@@ -193,14 +206,14 @@ class Webhook(snowflakes.Unique):
         mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
             If provided, whether the message should parse @everyone/@here
             mentions.
-        user_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.users.PartialUser]], builtins.bool]]
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
             If provided, and `builtins.True`, all mentions will be parsed.
             If provided, and `builtins.False`, no mentions will be parsed.
             Alternatively this may be a collection of
             `hikari.snowflakes.Snowflake`, or
             `hikari.users.PartialUser` derivatives to enforce mentioning
             specific users.
-        role_mentions : hikari.undefined.UndefinedOr[typing.Union[typing.Collection[hikari.snowflakes.SnowflakeishOr[hikari.guilds.PartialRole]], builtins.bool]]
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
             If provided, and `builtins.True`, all mentions will be parsed.
             If provided, and `builtins.False`, no mentions will be parsed.
             Alternatively this may be a collection of
@@ -228,12 +241,13 @@ class Webhook(snowflakes.Unique):
             If you pass a token that's invalid for the target webhook.
         builtins.ValueError
             If either `Webhook.token` is `builtins.None` or more than 100 unique
-            objects/entities are passed for `role_mentions` or `user_mentions.
+            objects/entities are passed for `role_mentions` or `user_mentions or
+            if `token` is not available.
         builtins.TypeError
             If both `attachment` and `attachments` are specified.
         """  # noqa: E501 - Line too long
         if not self.token:
-            raise ValueError("Cannot send a message using a webhook where we don't know the token.")
+            raise ValueError("Cannot send a message using a webhook where we don't know the token")
 
         return await self.app.rest.execute_webhook(
             webhook=self.id,
@@ -249,6 +263,179 @@ class Webhook(snowflakes.Unique):
             user_mentions=user_mentions,
             role_mentions=role_mentions,
         )
+
+    async def edit_message(
+        self,
+        message: snowflakes.SnowflakeishOr[messages_.Message],
+        content: undefined.UndefinedNoneOr[typing.Any] = undefined.UNDEFINED,
+        *,
+        embed: undefined.UndefinedNoneOr[embeds_.Embed] = undefined.UNDEFINED,
+        embeds: undefined.UndefinedNoneOr[typing.Sequence[embeds_.Embed]] = undefined.UNDEFINED,
+        mentions_everyone: undefined.UndefinedOr[bool] = undefined.UNDEFINED,
+        user_mentions: undefined.UndefinedOr[
+            typing.Union[snowflakes.SnowflakeishSequence[users_.PartialUser], bool]
+        ] = undefined.UNDEFINED,
+        role_mentions: undefined.UndefinedOr[
+            typing.Union[snowflakes.SnowflakeishSequence[guilds_.PartialRole], bool]
+        ] = undefined.UNDEFINED,
+    ) -> messages_.Message:
+        """Edit a message sent by a webhook.
+
+        Parameters
+        ----------
+        message : hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage]
+            The message to delete. This may be the object or the ID of
+            an existing message.
+        content : hikari.undefined.UndefinedNoneOr[typing.Any]
+            If provided, the message contents. If
+            `hikari.undefined.UNDEFINED`, then nothing will be sent
+            in the content. Any other value here will be cast to a
+            `builtins.str`.
+
+            If this is a `hikari.embeds.Embed` and no `embed` nor
+            no `embeds` kwarg is provided, then this will instead
+            update the embed. This allows for simpler syntax when
+            sending an embed alone.
+
+            Likewise, if this is a `hikari.files.Resource`, then the
+            content is instead treated as an attachment if no `attachment` and
+            no `attachments` kwargs are provided.
+
+        Other Parameters
+        ----------------
+        embed : hikari.undefined.UndefinedNoneOr[hikari.embeds.Embed]
+            If provided, the message embed.
+        embeds : hikari.undefined.UndefinedNoneOr[hikari.embeds.Embed]
+            If provided, the message embeds.
+        mentions_everyone : hikari.undefined.UndefinedOr[builtins.bool]
+            If provided, whether the message should parse @everyone/@here
+            mentions.
+        user_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.users.PartialUser], builtins.bool]]
+            If provided, and `builtins.True`, all user mentions will be detected.
+            If provided, and `builtins.False`, all user mentions will be ignored
+            if appearing in the message body.
+            Alternatively this may be a collection of
+            `hikari.snowflakes.Snowflake`, or
+            `hikari.users.PartialUser` derivatives to enforce mentioning
+            specific users.
+        role_mentions : hikari.undefined.UndefinedOr[typing.Union[hikari.snowflakes.SnowflakeishSequence[hikari.guilds.PartialRole], builtins.bool]]
+            If provided, and `builtins.True`, all role mentions will be detected.
+            If provided, and `builtins.False`, all role mentions will be ignored
+            if appearing in the message body.
+            Alternatively this may be a collection of
+            `hikari.snowflakes.Snowflake`, or
+            `hikari.guilds.PartialRole` derivatives to enforce mentioning
+            specific roles.
+
+        !!! note
+            Mentioning everyone, roles, or users in message edits currently
+            will not send a push notification showing a new mention to people
+            on Discord. It will still highlight in their chat as if they
+            were mentioned, however.
+
+        !!! note
+            There is currently no documented way to clear attachments or edit
+            attachments from a previously sent message on Discord's API. To
+            do this, delete the message and re-send it. This also applies
+            to embed attachments.
+
+        !!! warning
+            If you specify one of `mentions_everyone`, `user_mentions`, or
+            `role_mentions`, then all others will default to `builtins.False`,
+            even if they were enabled previously.
+
+            This is a limitation of Discord's design. If in doubt, specify all three of
+            them each time.
+
+        Returns
+        -------
+        hikari.messages.Message
+            The edited message.
+
+        Raises
+        ------
+        builtins.ValueError
+            If more than 100 unique objects/entities are passed for
+            `role_mentions` or `user_mentions` or `token` is not available.
+        builtins.TypeError
+            If both `attachment` and `attachments` are specified or if both
+            `embed` and `embeds` are specified.
+        hikari.errors.BadRequestError
+            This may be raised in several discrete situations, such as messages
+            being empty with no attachments or embeds; messages with more than
+            2000 characters in them, embeds that exceed one of the many embed
+            limits; too many attachments; attachments that are too large;
+            invalid image URLs in embeds; users in `user_mentions` not being
+            mentioned in the message content; roles in `role_mentions` not
+            being mentioned in the message content.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.NotFoundError
+            If the webhook or the message are not found.
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """  # noqa: E501 - Line too long
+        if self.token is None:
+            raise ValueError("Cannot edit a message using a webhook where we don't know the token")
+
+        return await self.app.rest.edit_webhook_message(
+            self.id,
+            token=self.token,
+            message=message,
+            content=content,
+            embed=embed,
+            embeds=embeds,
+            mentions_everyone=mentions_everyone,
+            user_mentions=user_mentions,
+            role_mentions=role_mentions,
+        )
+
+    async def delete_message(self, message: snowflakes.SnowflakeishOr[messages_.Message]) -> None:
+        """Delete a given message in a given channel.
+
+        Parameters
+        ----------
+        message : hikari.snowflakes.SnowflakeishOr[hikari.messages.PartialMessage]
+            The message to delete. This may be the object or the ID of
+            an existing message.
+
+        Raises
+        ------
+        builtins.ValueError
+            If `token` is not available.
+        hikari.errors.UnauthorizedError
+            If you are unauthorized to make the request (invalid/missing token).
+        hikari.errors.NotFoundError
+            If the webhook or the message are not found.
+        hikari.errors.RateLimitTooLongError
+            Raised in the event that a rate limit occurs that is
+            longer than `max_rate_limit` when making a request.
+        hikari.errors.RateLimitedError
+            Usually, Hikari will handle and retry on hitting
+            rate-limits automatically. This includes most bucket-specific
+            rate-limits and global rate-limits. In some rare edge cases,
+            however, Discord implements other undocumented rules for
+            rate-limiting, such as limits per attribute. These cannot be
+            detected or handled normally by Hikari due to their undocumented
+            nature, and will trigger this exception if they occur.
+        hikari.errors.InternalServerError
+            If an internal error occurs on Discord while handling the request.
+        """
+        if self.token is None:
+            raise ValueError("Cannot delete a message using a webhook where we don't know the token")
+
+        await self.app.rest.delete_webhook_message(self.id, token=self.token, message=message)
 
     async def delete(self, *, use_token: undefined.UndefinedOr[bool] = undefined.UNDEFINED) -> None:
         """Delete this webhook.
@@ -274,7 +461,7 @@ class Webhook(snowflakes.Unique):
         """
         if use_token:
             if self.token is None:
-                raise ValueError("This webhook's token is unknown, so cannot be used.")
+                raise ValueError("This webhook's token is unknown, so cannot be used")
             token: undefined.UndefinedOr[str] = self.token
         else:
             token = undefined.UNDEFINED
@@ -334,7 +521,7 @@ class Webhook(snowflakes.Unique):
         """  # noqa: E501 - Line too long
         if use_token:
             if self.token is None:
-                raise ValueError("This webhook's token is unknown, so cannot be used.")
+                raise ValueError("This webhook's token is unknown, so cannot be used")
             token: undefined.UndefinedOr[str] = self.token
         else:
             token = undefined.UNDEFINED
@@ -399,7 +586,7 @@ class Webhook(snowflakes.Unique):
         """
         if use_token:
             if self.token is None:
-                raise ValueError("This webhook's token is unknown, so cannot be used.")
+                raise ValueError("This webhook's token is unknown, so cannot be used")
             token: undefined.UndefinedOr[str] = self.token
         else:
             token = undefined.UNDEFINED

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2020 Nekokatt
+# Copyright (c) 2021 davfsa
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """Pytest integration."""
-import shutil
+import os
 
 from pipelines import config
 from pipelines import nox
@@ -57,13 +58,9 @@ def pytest_speedups(session: nox.Session) -> None:
 
 
 def _pytest(session: nox.Session, *py_flags: str) -> None:
-    shutil.rmtree(".coverage", ignore_errors=True)
+    try:
+        os.remove(".coverage")
+    except:
+        # Ignore errors
+        pass
     session.run("python", *py_flags, "-m", "pytest", *FLAGS, *session.posargs, config.TEST_PACKAGE)
-
-
-@nox.inherit_environment_vars
-@nox.session(reuse_venv=False)
-def coveralls(session: nox.Session) -> None:
-    """Run coveralls. This has little effect outside TravisCI."""
-    session.install("-U", "python-coveralls")
-    session.run("coveralls")
